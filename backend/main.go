@@ -28,16 +28,34 @@ func main() {
 
 	// Gorilla Mux
 	r := mux.NewRouter()
+
+	// curl -XPOST "http://localhost:8000" -> 405 Method Not Allowed
+	r.HandleFunc("/", QueryHandler).Methods(http.MethodGet)
+
+	r.UseEncodedPath()
+
+	// curl "http://localhost:8000/articles -> 200
+	// curl "http://localhost:8000/articles/ -> 404
+	//r.StrictSlash(false) // default
+	//r.Path("/articles").HandlerFunc(ArticleHandler)
+
+	// curl "http://localhost:8000/articles -> 200
+	// curl "http://localhost:8000/articles/ -> 301 to articles
+	//r.StrictSlash(true) // default
+	//r.Path("/articles").HandlerFunc(ArticleHandler)
+
+	// curl "http://localhost:8000/articles"  -> curl "http://localhost:8000/articles/{empty}/{empty}"
+	r.PathPrefix("/articles").HandlerFunc(ArticleHandler)
+
+	// curl http://localhost:8000/articles/books/123
 	s := r.PathPrefix("/articles").Subrouter()
 	s.HandleFunc("/{category}/{id:[0-9]+}", ArticleHandler).Name("articleRoute")
-	//r.HandleFunc("/articles/{category}/{id:[0-9]+}", ArticleHandler).Name("articleRoute")
-	r.PathPrefix("/articles").HandlerFunc(ArticleHandler)
-	r.StrictSlash(true)
-	r.HandleFunc("/", QueryHandler).Methods(http.MethodGet)
+	// is pretty much -> r.HandleFunc("/articles/{category}/{id:[0-9]+}", ArticleHandler).Name("articleRoute")
+
+	// curl "http://localhost:8000?id=123&category=books"
 	r.Queries("id", "category")
-	//r.PathPrefix("/articles/").HandlerFunc(ArticleHandler)
-	r.UseEncodedPath()
-	s.UseEncodedPath()
+	r.PathPrefix("/articles/").HandlerFunc(ArticleHandler)
+
 	url, _ := s.Get("articleRoute").URL("category", "books", "id", "123")
 	fmt.Printf(url.String())
 
