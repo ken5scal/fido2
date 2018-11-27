@@ -93,7 +93,7 @@ type ServerPublicKeyCredentialCreationOptionsRequest struct {
 		//It is Enum with either value {"platform","cross-platform"}
 		AuthenticationAttachment string `json:"authenticatorAttachment"`
 		//https://w3c.github.io/webauthn/#userVerificationRequirement
-		//It is Enum with either value {"required","preferrerd","discouraged"}
+		//It is Enum with either value {"required","preferred","discouraged"}
 		UserVerificationRequirement string `json:"userVerification"`// default = preferred
 	} `json:"authenticatorSelection,omitempty"`
 
@@ -101,6 +101,51 @@ type ServerPublicKeyCredentialCreationOptionsRequest struct {
 	//It is Enum with either value {"none","indirect","direct"}
 	AttestationConveyancePreference AttestationConveyancePreference `json:"attestation,omitempty"` // default="none"
 }
+
+type UserVerificationRequirement int
+
+const (
+	_ UserVerificationRequirement = iota
+	Required
+	Preferred
+	Discouraged
+)
+func (u UserVerificationRequirement) String() string {
+	return toStringUV[u]
+}
+var toStringUV = map[UserVerificationRequirement]string{
+	Required:  "required",
+	Preferred:  "preferred",
+	Discouraged: "discouraged",
+}
+func (u *UserVerificationRequirement) MarshalJSON() ([]byte, error) {
+	buffer := bytes.NewBufferString(`"`)
+	buffer.WriteString(toStringUV[*u])
+	buffer.WriteString(`"`)
+	return buffer.Bytes(), nil
+}
+
+func (u *UserVerificationRequirement) UnmarshalJSON(b []byte) error {
+	var j string
+	err := json.Unmarshal(b, &j)
+	if err != nil {
+		return err
+	}
+	// Note that if the string cannot be found then it will be set to the zero value, 'Created' in this case.
+	var uv UserVerificationRequirement
+	switch j {
+	case "required":
+		uv = Required
+	case "discouraged":
+		uv = Discouraged
+	case "preferred":
+	default:
+		uv = Preferred
+	}
+	*u = uv
+	return nil
+}
+
 
 type AttestationConveyancePreference int
 const (
