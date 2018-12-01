@@ -9,18 +9,18 @@ import (
 // ServerPublicKeyCredentialCreationOptionsRequest
 // https://fidoalliance.org/specs/fido-v2.0-rd-20180702/fido-server-v2.0-rd-20180702.html#serverpublickeycredentialcreationoptionsrequest
 type ServerPublicKeyCredentialCreationOptionsRequest struct {
-	UserName string `json:"username"`
+	UserName    string `json:"userName"`
 	DisplayName string `json:"displayName"`
 
 	// https://w3c.github.io/webauthn/#authenticatorSelection
-	AuthenticatorSelectionCriteria struct{
+	AuthenticatorSelectionCriteria struct {
 		RequireResidentKey bool `json:"residentKey"` // default = false
 		//https://w3c.github.io/webauthn/#attachment
 		//It is Enum with either value {"platform","cross-platform"}
-		AuthenticationAttachment string `json:"authenticatorAttachment,omitempty"`  // no default
+		AuthenticationAttachment string `json:"authenticatorAttachment,omitempty"` // no default
 		//https://w3c.github.io/webauthn/#userVerificationRequirement
 		//It is Enum with either value {"required","preferred","discouraged"}
-		UserVerificationRequirement string `json:"userVerification"`// default = preferred
+		UserVerificationRequirement string `json:"userVerification"` // default = preferred
 	} `json:"authenticatorSelection,omitempty"`
 
 	//https://w3c.github.io/webauthn/#enumdef-attestationconveyancepreference
@@ -28,13 +28,17 @@ type ServerPublicKeyCredentialCreationOptionsRequest struct {
 	AttestationConveyancePreference AttestationConveyancePreference `json:"attestation,omitempty"` // default="none"
 }
 
-func (s ServerPublicKeyCredentialCreationOptionsRequest) validate() bool {
-	return s.UserName != "" || s.DisplayName != ""
+func (s ServerPublicKeyCredentialCreationOptionsRequest) validate() error {
+	if s.UserName == "" && s.DisplayName == "" {
+		return nil
+	}
+	return errors.New("Both userName and displayName must not be present")
 }
 
 type AuthenticatorAttachment int
+
 const (
-	_             AuthenticatorAttachment = iota
+	_ AuthenticatorAttachment = iota
 	Platform
 	CrossPlatform
 )
@@ -42,9 +46,10 @@ const (
 func (a AuthenticatorAttachment) String() string {
 	return toStringAA[a]
 }
+
 var toStringAA = map[AuthenticatorAttachment]string{
-	Platform:  "platform",
-	CrossPlatform:  "cross-platform",
+	Platform:      "platform",
+	CrossPlatform: "cross-platform",
 }
 
 func (a *AuthenticatorAttachment) MarshalJSON() ([]byte, error) {
@@ -73,20 +78,24 @@ func (a *AuthenticatorAttachment) UnmarshalJSON(b []byte) error {
 }
 
 type UserVerificationRequirement int
+
 const (
 	_ UserVerificationRequirement = iota
 	Required
 	Preferred
 	Discouraged
 )
+
 func (u UserVerificationRequirement) String() string {
 	return toStringUV[u]
 }
+
 var toStringUV = map[UserVerificationRequirement]string{
-	Required:  "required",
-	Preferred:  "preferred",
+	Required:    "required",
+	Preferred:   "preferred",
 	Discouraged: "discouraged",
 }
+
 func (u *UserVerificationRequirement) MarshalJSON() ([]byte, error) {
 	buffer := bytes.NewBufferString(`"`)
 	buffer.WriteString(toStringUV[*u])
@@ -109,26 +118,28 @@ func (u *UserVerificationRequirement) UnmarshalJSON(b []byte) error {
 	case "preferred":
 		*u = Preferred
 	default:
-		*u = Preferred  //Preferred is the default value
+		*u = Preferred //Preferred is the default value
 	}
 	return nil
 }
 
 type AttestationConveyancePreference int
+
 const (
 	_ AttestationConveyancePreference = iota
 	None
 	Indirect
 	Direct
 )
+
 func (a AttestationConveyancePreference) String() string {
 	return toString[a]
 }
 
 var toString = map[AttestationConveyancePreference]string{
-	None:  "none",
-	Indirect:  "indirect",
-	Direct: "direct",
+	None:     "none",
+	Indirect: "indirect",
+	Direct:   "direct",
 }
 
 func (a *AttestationConveyancePreference) MarshalJSON() ([]byte, error) {
@@ -161,7 +172,7 @@ func (a *AttestationConveyancePreference) UnmarshalJSON(b []byte) error {
 // ServerPublicKeyCredentialCreationOptionsResponse
 // https://fidoalliance.org/specs/fido-v2.0-rd-20180702/fido-server-v2.0-rd-20180702.html#serverpublickeycredentialcreationoptionsresponse
 type ServerPublicKeyCredentialCreationOptionsResponse struct {
-	Challenge string `json:"attestation"`
+	Challenge                   string `json:"challenge"`
 	PublicKeyCredentialRpEntity struct {
 		Name string `json:"name"`
 	} `json:"rp"`
@@ -170,21 +181,21 @@ type ServerPublicKeyCredentialCreationOptionsResponse struct {
 		Name        string `json:"name"`
 		DisplayName string `json:"displayName"`
 	} `json:"user"`
-	PublicKeyCredentialParameters []PubKeyParam `json:"pubKeyCredParams"`
-	Timeout   uint64 `json:"timeout,omitempty"`
-	ExcludeCredentials []ExludeCredential `json:"excludeCredentials,omitempty"`
+	PublicKeyCredentialParameters  []PubKeyParam      `json:"pubKeyCredParams"`
+	Timeout                        uint64             `json:"timeout,omitempty"`
+	ExcludeCredentials             []ExludeCredential `json:"excludeCredentials,omitempty"`
 	AuthenticatorSelectionCriteria struct {
 		ResidentKey             bool   `json:"residentKey"`
 		AuthenticatorAttachment string `json:"authenticatorAttachment"`
 		UserVerification        string `json:"userVerification"`
 	} `json:"authenticatorSelection,omitempty"`
-	Attestation string `json:"attestation,omitempty"`  // default="none"
+	Attestation string `json:"attestation,omitempty"` // default="none"
 	// AuthenticationExtensionsClientInputs  struct{} //TODO 一旦無視
 }
 
 type PubKeyParam struct {
 	Type string `json:"type"` //今は固定 publick-key: https://w3c.github.io/webauthn/#enumdef-publickeycredentialtype
-	Alg  int    `json:"alg"` //https://w3c.github.io/webauthn/#alg-identifier
+	Alg  int    `json:"alg"`  //https://w3c.github.io/webauthn/#alg-identifier
 }
 
 type ExludeCredential struct {
