@@ -14,6 +14,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"github.com/ugorji/go/codec"
 )
 
 var rp = "secure-brigate"
@@ -32,7 +33,46 @@ func init() {
 	log.Logger = log.With().Caller().Logger().Output(zerolog.ConsoleWriter{Out: os.Stdout})
 }
 
+type A struct {
+	I int
+	S string
+}
+type B float64
+type C struct {
+	Fun bool
+	Amt int
+}
+var v1 A
+var v2 *A = &v1
+var v3 int = 9
+var v4 bool = false
+var v5 interface{} = v3
+var v6 interface{} = nil
+var v7 B
+var v8 *B = &v7
+
+
 func main() {
+	var m = map[string]*A{"1": &A{I:1, S:"one"}, "2": &A{I:2, S:"two"} }
+	fmt.Printf("before: %v\n", m)
+	var b = []byte(`{"1": {"I":111}, "3": {"I": 333} }`)
+	if err := codec.NewDecoderBytes(b, new(codec.JsonHandle)).Decode(&m); err != nil {
+		fmt.Println(err)
+	}
+	fmt.Printf(" after: %v\n", m)
+	for k, v := range m {
+		fmt.Printf("\t%v: %v\n", k, v)
+	}
+
+	b = []byte(`{"Fun": true, "Amt": -2}`)
+	var c C
+	if err := codec.NewDecoderBytes(b, new(codec.JsonHandle)).Decode(&c); err != nil {
+		fmt.Println(err)
+	}
+	fmt.Printf(" after: %v\n", c)
+	fmt.Println(c.Amt)
+	fmt.Println(c.Fun)
+
 	// HandlerFunc is a method of multiplexer (ServerMux)
 	// Handler implements ServeHTTP(ResponseWriter, *Request)
 	http.HandleFunc("/hello", myServer)

@@ -7,7 +7,6 @@ import (
 	"unicode/utf8"
 	"encoding/base64"
 	"crypto/sha256"
-	"encoding/hex"
 )
 
 // ServerPublicKeyCredentialCreationOptionsRequest
@@ -292,7 +291,7 @@ func (s ServerAuthenticatorAttestationResponse) validate(challenge, origin strin
 
 	sha := sha256.New()
 	sha.Write(clientDataInBytes)
-	hashOfClientData := hex.EncodeToString(sha.Sum(nil))
+	//hashOfClientData := hex.EncodeToString(sha.Sum(nil))
 
 	return nil
 }
