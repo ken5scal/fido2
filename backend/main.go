@@ -94,56 +94,67 @@ func main() {
 
 // RegisterHandler
 // FIDO: https://fidoalliance.org/specs/fido-v2.0-rd-20180702/fido-server-v2.0-rd-20180702.html#example-credential-creation-options
+// ex: curl -XPOST "http://localhost:8000/register" -H "Content-Type: application/json" -d '{"userName": "value", "displayName": "ken5"}' -v
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {
+	var optionsRequest ServerPublicKeyCredentialCreationOptionsRequest
+	var optionsResponse ServerPublicKeyCredentialCreationOptionsResponse
+	var fidoError FidoError
 
 	defer r.Body.Close()
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		// TODO do proper error handling
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("failed reading body"))
+		fidoError.Status = "failed"
+		fidoError.ErrorMessage = "failed reading body: " + err.Error()
 		log.Error().Err(err).Msg("failed reading body")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(&fidoError)
 		return
 	}
 
-	var optionsRequest ServerPublicKeyCredentialCreationOptionsRequest
+	// Decode Credential Creation Options Options Request Body
 	if err := json.NewDecoder(bytes.NewBuffer(body)).Decode(&optionsRequest); err != nil {
 		// TODO do proper error handling
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("failed parsing body"))
+		fidoError.Status = "failed"
+		fidoError.ErrorMessage = "failed parsing body: " + err.Error()
 		log.Error().Err(err).Msg("failed parsing body")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(&fidoError)
 		return
 	}
 
-	if err := optionsRequest.validate; err != nil {
+	// Validate Credential Creation Options Options Request
+	if err := optionsRequest.validate(); err != nil {
+		// TODO do proper error handling
+		fidoError.Status = "failed"
+		fidoError.ErrorMessage = err.Error()
+		log.Error().Err(err).Msg("Bad Parameter")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(&fidoError)
+		return
+	} else {
 		sha := sha256.New()
 		sha.Write([]byte(""))
 		challenge = hex.EncodeToString(sha.Sum(nil))
 
-		optionsResponse := ServerPublicKeyCredentialCreationOptionsResponse{
-			PublicKeyCredentialRpEntity: struct {
-				Name string `json:"name"`
-			}{rp},
-			ServerPublicKeyCredentialUserEntity: struct {
-				ID          string `json:"id"`
-				Name        string `json:"name"`
-				DisplayName string `json:"displayName"`
-			}{uuid, optionsRequest.UserName, optionsRequest.DisplayName},
-			Challenge:                     challenge,
-			PublicKeyCredentialParameters: []PubKeyParam{{Type: "publick-key", Alg: -7}}, //For Now, just use ES256
-		}
+		optionsResponse.Challenge = challenge
+		optionsResponse.PublicKeyCredentialRpEntity = struct {
+			Name string `json:"name"`
+		}{rp}
+		optionsResponse.ServerPublicKeyCredentialUserEntity = struct {
+			ID          string `json:"id"`
+			Name        string `json:"name"`
+			DisplayName string `json:"displayName"`
+		}{uuid, optionsRequest.UserName, optionsRequest.DisplayName}
+		optionsResponse.PublicKeyCredentialParameters = []PubKeyParam{{Type: "publick-key", Alg: -7}} //For Now, just use ES256
+	}
 
-		if err := json.NewEncoder(w).Encode(&optionsResponse); err != nil {
-			// TODO do proper error handling
-			w.WriteHeader(http.StatusInternalServerError)
-			log.Error().Err(err).Msg(fmt.Sprintf("failed encoding option response: %v", optionsResponse))
-		} else {
-			w.WriteHeader(http.StatusOK)
-		}
+	// Encode Response
+	if err := json.NewEncoder(w).Encode(&optionsResponse); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Error().Err(err).Msg(fmt.Sprintf("failed encoding option response: %v", optionsResponse))
 	} else {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("validation failed"))
-		log.Error().Err(err()).Str("optionRequest", fmt.Sprintf("%s", optionsRequest)).Msg("validation failed")
+		w.WriteHeader(http.StatusOK)
 	}
 }
 

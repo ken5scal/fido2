@@ -29,10 +29,10 @@ type ServerPublicKeyCredentialCreationOptionsRequest struct {
 }
 
 func (s ServerPublicKeyCredentialCreationOptionsRequest) validate() error {
-	if s.UserName == "" && s.DisplayName == "" {
+	if s.UserName != "" && s.DisplayName != "" {
 		return nil
 	}
-	return errors.New("Both userName and displayName must not be present")
+	return errors.New("Both userName and displayName must be present")
 }
 
 type AuthenticatorAttachment int
@@ -172,6 +172,7 @@ func (a *AttestationConveyancePreference) UnmarshalJSON(b []byte) error {
 // ServerPublicKeyCredentialCreationOptionsResponse
 // https://fidoalliance.org/specs/fido-v2.0-rd-20180702/fido-server-v2.0-rd-20180702.html#serverpublickeycredentialcreationoptionsresponse
 type ServerPublicKeyCredentialCreationOptionsResponse struct {
+	// Required
 	Challenge                   string `json:"challenge"`
 	PublicKeyCredentialRpEntity struct {
 		Name string `json:"name"`
@@ -182,6 +183,8 @@ type ServerPublicKeyCredentialCreationOptionsResponse struct {
 		DisplayName string `json:"displayName"`
 	} `json:"user"`
 	PublicKeyCredentialParameters  []PubKeyParam      `json:"pubKeyCredParams"`
+
+	// Optional
 	Timeout                        uint64             `json:"timeout,omitempty"`
 	ExcludeCredentials             []ExludeCredential `json:"excludeCredentials,omitempty"`
 	AuthenticatorSelectionCriteria struct {
