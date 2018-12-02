@@ -4,6 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"github.com/pkg/errors"
+	"unicode/utf8"
+	"encoding/base64"
+	"crypto/sha256"
+	"encoding/hex"
 )
 
 // ServerPublicKeyCredentialCreationOptionsRequest
@@ -185,8 +189,8 @@ type ServerPublicKeyCredentialCreationOptionsResponse struct {
 	PublicKeyCredentialParameters  []PubKeyParam      `json:"pubKeyCredParams"`
 
 	// Optional
-	Timeout                        uint64             `json:"timeout,omitempty"`
-	ExcludeCredentials             []ExludeCredential `json:"excludeCredentials,omitempty"`
+	Timeout                        uint64              `json:"timeout,omitempty"`
+	ExcludeCredentials             []ExcludeCredential `json:"excludeCredentials,omitempty"`
 	AuthenticatorSelectionCriteria struct {
 		ResidentKey             bool   `json:"residentKey"`
 		AuthenticatorAttachment string `json:"authenticatorAttachment"`
@@ -201,7 +205,94 @@ type PubKeyParam struct {
 	Alg  int    `json:"alg"`  //https://w3c.github.io/webauthn/#alg-identifier
 }
 
-type ExludeCredential struct {
+type ExcludeCredential struct {
 	Type string `json:"type"`
 	ID   string `json:"id"`
+}
+
+// ServerPublicKeyCredential
+// https://fidoalliance.org/specs/fido-v2.0-rd-20180702/fido-server-v2.0-rd-20180702.html#serverpublickeycredential
+type ServerPublicKeyCredential struct {
+	// This attribute is inherited from Credential, though ServerPublicKeyCredential overrides it with base64url encoding of the authenticator credId
+	ID string `json:"id"`
+	// same as id
+	RawID string `json:"rawId"`
+	// a dictionary defined as ServerAuthenticatorAttestationResponse or by ServerAuthenticatorAttestationResponse
+	AuthenticatorAttestationResponse ServerAuthenticatorAttestationResponse `json:"response"`
+	// This attribute is inherited from Credential, though ServerPublicKeyCredential overrides it with "public-key"
+	Type string `json:"type"` // public-key固定
+	// ???  map containing extension identifier, which contain client extension output entries produced by the extension’s client extension processing
+	AuthenticationExtensionsClientOutputs struct{} `json:"getClientExtensionResults"`
+}
+
+type ServerAuthenticatorAttestationResponse struct {
+	ClientDataJSON string `json:"clientDataJSON"` //base64url encoded clientDataJSON buffer
+	AttestationObject string `json:"attestationObject"` //base64url encoded attestationObject buffer
+}
+
+// ClientDataJSON
+// https://www.w3.org/TR/webauthn/#sec-client-data
+type ClientData struct {
+	Type string `json:"type"`
+	Challenge string `json:"challenge"`
+	Origin string `json:"origin"`
+	TokenBiding TokenBinding `json:"tokenBinding"`
+}
+
+// TokenBinding
+// https://www.w3.org/TR/webauthn/#sec-client-data
+type TokenBinding struct {
+	TokenBindingStatus TokenBindingStatus `json:"status"`
+	ID string `json:"id"`
+}
+
+type TokenBindingStatus int
+const (
+	_ TokenBindingStatus = iota
+	Present
+	Supported
+	NotSupported //?Not really shown in https://www.w3.org/TR/webauthn/#sec-client-data
+)
+
+func (s ServerAuthenticatorAttestationResponse) validate(challenge, origin string) error {
+	clientDataInBytes, err := base64.StdEncoding.DecodeString(s.ClientDataJSON)
+	if err != nil {
+		return errors.New("Failed Decoding ClientDataJSON")
+	}
+
+	// this should satisfy WebAuthN 7.1.1
+	// https://www.w3.org/TR/webauthn/#registering-a-new-credential
+	if utf8.Valid(clientDataInBytes) {
+		return errors.New("Invalid json")
+	}
+
+	var clientData ClientData
+	if err := json.Unmarshal(clientDataInBytes, &clientData); err != nil {
+		return errors.New("Failed Unmarshal ClientDataJSON")
+	}
+
+	if clientData.Type != "webauthn.create" {
+		return errors.New("ClientData type is not 'webauthn.create'")
+	}
+
+	if clientData.Challenge != challenge {
+		return errors.New("ClientData challenge is not same as the one from ServerPublicKeyCredentialCreationOptionsResponse")
+	}
+
+	// given a Relying Party whose origin is https://login.example.com:1337, then the following RP IDs are valid: login.example.com (default) and example.com, but not m.login.example.com and not com
+	// https://www.w3.org/TR/webauthn/#webauthn-relying-party
+	if clientData.Origin != origin {
+		return errors.New("ClientData challenge is not same as the origin")
+	}
+
+	// TODO Skip for now
+	//if clientData.TokenBiding.TokenBindingStatus == {
+	//
+	//}
+
+	sha := sha256.New()
+	sha.Write(clientDataInBytes)
+	hashOfClientData := hex.EncodeToString(sha.Sum(nil))
+
+	return nil
 }
