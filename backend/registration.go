@@ -255,7 +255,7 @@ const (
 )
 
 func (s ServerAuthenticatorAttestationResponse) validate(challenge, origin string) error {
-	clientDataInBytes, err := base64.StdEncoding.DecodeString(s.ClientDataJSON)
+	clientDataInBytes, err := base64.URLEncoding.DecodeString(s.ClientDataJSON)
 	if err != nil {
 		return errors.New("Failed Decoding ClientDataJSON")
 	}
