@@ -2,11 +2,11 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"github.com/pkg/errors"
 	"unicode/utf8"
-	"encoding/base64"
-	"crypto/sha256"
 )
 
 // ServerPublicKeyCredentialCreationOptionsRequest
@@ -185,7 +185,7 @@ type ServerPublicKeyCredentialCreationOptionsResponse struct {
 		Name        string `json:"name"`
 		DisplayName string `json:"displayName"`
 	} `json:"user"`
-	PublicKeyCredentialParameters  []PubKeyParam      `json:"pubKeyCredParams"`
+	PublicKeyCredentialParameters []PubKeyParam `json:"pubKeyCredParams"`
 
 	// Optional
 	Timeout                        uint64              `json:"timeout,omitempty"`
@@ -225,16 +225,16 @@ type ServerPublicKeyCredential struct {
 }
 
 type ServerAuthenticatorAttestationResponse struct {
-	ClientDataJSON string `json:"clientDataJSON"` //base64url encoded clientDataJSON buffer
+	ClientDataJSON    string `json:"clientDataJSON"`    //base64url encoded clientDataJSON buffer
 	AttestationObject string `json:"attestationObject"` //base64url encoded attestationObject buffer
 }
 
 // ClientDataJSON
 // https://www.w3.org/TR/webauthn/#sec-client-data
 type ClientData struct {
-	Type string `json:"type"`
-	Challenge string `json:"challenge"`
-	Origin string `json:"origin"`
+	Type        string       `json:"type"`
+	Challenge   string       `json:"challenge"`
+	Origin      string       `json:"origin"`
 	TokenBiding TokenBinding `json:"tokenBinding"`
 }
 
@@ -242,10 +242,11 @@ type ClientData struct {
 // https://www.w3.org/TR/webauthn/#sec-client-data
 type TokenBinding struct {
 	TokenBindingStatus TokenBindingStatus `json:"status"`
-	ID string `json:"id"`
+	ID                 string             `json:"id"`
 }
 
 type TokenBindingStatus int
+
 const (
 	_ TokenBindingStatus = iota
 	Present

@@ -9,12 +9,12 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/ugorji/go/codec"
 	"io"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"os"
-	"github.com/ugorji/go/codec"
 )
 
 var rp = "secure-brigate"
@@ -42,6 +42,7 @@ type C struct {
 	Fun bool
 	Amt int
 }
+
 var v1 A
 var v2 *A = &v1
 var v3 int = 9
@@ -51,9 +52,8 @@ var v6 interface{} = nil
 var v7 B
 var v8 *B = &v7
 
-
 func main() {
-	var m = map[string]*A{"1": &A{I:1, S:"one"}, "2": &A{I:2, S:"two"} }
+	var m = map[string]*A{"1": &A{I: 1, S: "one"}, "2": &A{I: 2, S: "two"}}
 	fmt.Printf("before: %v\n", m)
 	var b = []byte(`{"1": {"I":111}, "3": {"I": 333} }`)
 	if err := codec.NewDecoderBytes(b, new(codec.JsonHandle)).Decode(&m); err != nil {
