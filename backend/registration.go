@@ -296,3 +296,45 @@ func (s ServerAuthenticatorAttestationResponse) validate(challenge, origin strin
 
 	return nil
 }
+
+//============================================
+// Attestation Object
+//============================================
+
+// Attestation Object
+// https://www.w3.org/TR/webauthn/#generating-an-attestation-object
+type AttestationObject struct {
+	Fmt string `codec:"fmt"`
+	AttStmt AttestationStmt `codec:"attStmt"`
+	AuthData []byte  `codec:"authData"`
+}
+
+// AttestationStatement
+// The format varies based on Attestation Format
+// https://www.w3.org/TR/webauthn/#sctn-attstn-fmt-ids
+
+type AttestationStmt interface {
+	Verify() bool
+}
+
+// AndroidKeyAttestation
+// https://www.w3.org/TR/webauthn/#android-key-attestation
+type AndroidKeyAttestationStmt struct {
+	Sig []byte `codec:"sig"`
+	X5c [][]byte `codec:"x5c"`
+}
+
+func (a AndroidKeyAttestationStmt) Verify() bool {
+	return false
+}
+
+// AndroidSafetyNetAttestationStmt
+// https://www.w3.org/TR/webauthn/#android-safetynet-attestation
+type AndroidSafetyNetAttestationStmt struct {
+	Ver string `codec:"ver"` // The version number of Google Play Services responsible for providing the SafetyNet API
+	Response []byte `codec:"response"` //The UTF-8 encoded result of the getJwsResult() call of the SafetyNet API. This value is a JWS object
+}
+
+func (a AndroidSafetyNetAttestationStmt) Verify() bool {
+	return false
+}

@@ -32,43 +32,6 @@ type Config struct {
 	Debug bool
 }
 
-// Attestation Object
-// https://www.w3.org/TR/webauthn/#generating-an-attestation-object
-type AttestationObject struct {
-	Fmt string `codec:"fmt"`
-	AttStmt AndroidSafetyNetAttestationStmt `codec:"attStmt"`
-	AuthData []byte  `codec:"authData"`
-}
-
-// AttestationStatement
-// The format varies based on Attestation Format
-// https://www.w3.org/TR/webauthn/#sctn-attstn-fmt-ids
-type AttestationStatement struct {
-	Sig []byte `codec:"sig"`
-	X5c [][]byte `codec:"x5c"`
-
-	// Android Key Attestation
-	// sig
-	// x5c
-	// alg: COSEAlgorithmIdentifier
-
-	// Android SafetyNet Attestation
-}
-
-// AndroidKeyAttestation
-// https://www.w3.org/TR/webauthn/#android-key-attestation
-type AndroidKeyAttestationStmt struct {
-	Sig []byte `codec:"sig"`
-	X5c [][]byte `codec:"x5c"`
-}
-
-// AndroidSafetyNetAttestationStmt
-// https://www.w3.org/TR/webauthn/#android-safetynet-attestation
-type AndroidSafetyNetAttestationStmt struct {
-	Ver string `codec:"ver"` // The version number of Google Play Services responsible for providing the SafetyNet API
-	Response []byte `codec:"response"` //The UTF-8 encoded result of the getJwsResult() call of the SafetyNet API. This value is a JWS object
-}
-
 func init() {
 	//if _, err := toml.DecodeFile("config.toml", &config); err != nil {
 	//	log.Fatal().Err(err).Msg("Failed reading config")
@@ -179,21 +142,21 @@ func main() {
 	cborByte, err = base64Url.DecodeString(attestationObj)
 	err = codec.NewDecoderBytes(cborByte, new(codec.CborHandle)).Decode(&m2)
 	if err != nil {
-		log.Error().Err(err).Msg("failed decoding cbor")
+		log.Fatal().Err(err).Msg("failed decoding cbor")
 	}
 	fmt.Println("================ Android SafetyNet attestation ===============")
 	for k, v := range m2.(map[interface{}]interface{}) {
 		fmt.Printf("%v: %v\n", k, v)
 	}
 
-	var ao AttestationObject
+	ao := AttestationObject{AttStmt: AndroidSafetyNetAttestationStmt{}}
 	if err := codec.NewDecoderBytes(cborByte, new(codec.CborHandle)).Decode(&ao); err != nil {
-		log.Error().Err(err).Msg("failed decoding cbor")
+		log.Fatal().Err(err).Msg("failed decoding cbor")
 	}
 	fmt.Println("fmt: " + ao.Fmt)
-	fmt.Println("ver: " + ao.AttStmt.Ver)
-	fmt.Println("response: " + string(ao.AttStmt.Response))
 	fmt.Println("authData: %v", hex.Dump(ao.AuthData))
+	fmt.Println("ver: " + ao.AttStmt.(AndroidSafetyNetAttestationStmt).Ver)
+	fmt.Println("response: " + string(ao.AttStmt.(AndroidSafetyNetAttestationStmt).Response))
 
 	// HandlerFunc is a method of multiplexer (ServerMux)
 	// Handler implements ServeHTTP(ResponseWriter, *Request)
