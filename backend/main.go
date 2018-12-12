@@ -145,10 +145,22 @@ func main() {
 		log.Fatal().Err(err).Msg("failed decoding cbor")
 	}
 	fmt.Println("================ Android SafetyNet attestation ===============")
+
+	// rpIdHash
+	sha := sha256.New()
+	sha.Write([]byte(rp))
+	rpIdHash := sha.Sum(nil)
+
 	for k, v := range m2.(map[interface{}]interface{}) {
 		fmt.Printf("%v: %v\n", k, v)
+		if k == "authData" {
+			fmt.Println(rpIdHash)
+			fmt.Println(v)
+			fmt.Println(hex.EncodeToString(v.([]byte)[0:32]))
+		}
 	}
 
+	fmt.Println("================ Android SafetyNet attestation in struct ===============")
 	ao := AttestationObject{AttStmt: AndroidSafetyNetAttestationStmt{}}
 	if err := codec.NewDecoderBytes(cborByte, new(codec.CborHandle)).Decode(&ao); err != nil {
 		log.Fatal().Err(err).Msg("failed decoding cbor")
@@ -157,6 +169,23 @@ func main() {
 	fmt.Println("authData: %v", hex.Dump(ao.AuthData))
 	fmt.Println("ver: " + ao.AttStmt.(AndroidSafetyNetAttestationStmt).Ver)
 	fmt.Println("response: " + string(ao.AttStmt.(AndroidSafetyNetAttestationStmt).Response))
+
+	fmt.Println("rpIdHash in AuthData" + hex.EncodeToString(ao.AuthData[0:32]))
+	flags := ao.AuthData[32]
+	fmt.Printf("%b\n", flags)
+	for i := uint(0); i < 8; i++ {
+		fmt.Println(flags & (1 << i) >> i)
+	}
+	fmt.Println("User Presence: " + fmt.Sprintf("%b",flags & (1 << 0) >> 0))
+	// Bit1, 3-6
+	//fmt.Println("Reserved for future: " + fmt.Sprintf("%b",flags & (1 << 1) >> 1))
+	fmt.Println("User Verification: " + fmt.Sprintf("%b",flags & (1 << 2) >> 2))
+	fmt.Println("Attested Credential Data: " + fmt.Sprintf("%b",flags & (1 << 6) >> 6))
+	fmt.Println("Extension data included: " + fmt.Sprintf("%b",flags & (1 << 7) >> 7))
+	fmt.Println("signCount in AuthData" + hex.EncodeToString(ao.AuthData[33:37]))
+	//attestedCredentialData := ao.AuthData[37:xxxx] Length depends on https://www.w3.org/TR/webauthn/#attested-credential-data
+	//extentions := ao.AuthData[xxxx:yyyy] Length depends on https://www.w3.org/TR/webauthn/#extension-identifier
+
 
 	// HandlerFunc is a method of multiplexer (ServerMux)
 	// Handler implements ServeHTTP(ResponseWriter, *Request)

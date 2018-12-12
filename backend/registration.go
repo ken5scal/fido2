@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"github.com/pkg/errors"
 	"unicode/utf8"
+	"encoding/hex"
+	"github.com/ugorji/go/codec"
 )
 
 // ServerPublicKeyCredentialCreationOptionsRequest
@@ -254,45 +256,84 @@ const (
 	NotSupported //?Not really shown in https://www.w3.org/TR/webauthn/#sec-client-data
 )
 
-func (s ServerAuthenticatorAttestationResponse) validate(challenge, origin string) error {
+// Validate
+// WebAuthN: 7.1
+// https://www.w3.org/TR/webauthn/#registering-a-new-credential
+var hashOfClientData string
+func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin string) error {
 	clientDataInBytes, err := base64.URLEncoding.DecodeString(s.ClientDataJSON)
 	if err != nil {
 		return errors.New("Failed Decoding ClientDataJSON")
 	}
 
-	// this should satisfy WebAuthN 7.1.1
+	// 7.1.1
 	// https://www.w3.org/TR/webauthn/#registering-a-new-credential
 	if utf8.Valid(clientDataInBytes) {
 		return errors.New("Invalid json")
 	}
 
+	// 7.1.2
 	var clientData ClientData
 	if err := json.Unmarshal(clientDataInBytes, &clientData); err != nil {
 		return errors.New("Failed Unmarshal ClientDataJSON")
 	}
 
+	// 7.1.3
+	// TODO make this enum
 	if clientData.Type != "webauthn.create" {
 		return errors.New("ClientData type is not 'webauthn.create'")
 	}
 
+	// 7.1.4
 	if clientData.Challenge != challenge {
 		return errors.New("ClientData challenge is not same as the one from ServerPublicKeyCredentialCreationOptionsResponse")
 	}
 
+	// 7.1.5
 	// given a Relying Party whose origin is https://login.example.com:1337, then the following RP IDs are valid: login.example.com (default) and example.com, but not m.login.example.com and not com
 	// https://www.w3.org/TR/webauthn/#webauthn-relying-party
+	// TODO Implement Correctly
 	if clientData.Origin != origin {
 		return errors.New("ClientData challenge is not same as the origin")
 	}
 
-	// TODO Skip for now
+	// 7.1.6
+	// TODO Skip for now (Got No Idea)
 	//if clientData.TokenBiding.TokenBindingStatus == {
 	//
 	//}
 
+	// 7.1.7
 	sha := sha256.New()
 	sha.Write(clientDataInBytes)
 	//hashOfClientData := hex.EncodeToString(sha.Sum(nil))
+
+	// 7.1.8
+	cborByte := make([]byte, base64.RawURLEncoding.DecodedLen(len(s.AttestationObject)))
+	cborByte, err = base64.RawURLEncoding.DecodeString(s.AttestationObject)
+	if err != nil {
+		return errors.Wrap(err, "failed base64 url decoding AttestationObject")
+	}
+
+	// TODO Not quite sure how to extract AttObj based on not yet decoded Format
+	ao := AttestationObject{}
+	if err := codec.NewDecoderBytes(cborByte, new(codec.CborHandle)).Decode(&ao); err != nil {
+		return errors.Wrap(err, "failed cbor decoding AttestationObject")
+	}
+
+	// 7.1.9
+	// AuthData: https://www.w3.org/TR/webauthn/#authenticator-data
+	if len(ao.AuthData) < 37 {
+		return errors.New("AuthData must be 37 bytes or more")
+	}
+	sha.Write([]byte(rp))
+	rpIdHash := hex.EncodeToString(sha.Sum(nil))
+	if rpIdHash != hex.EncodeToString(ao.AuthData[0:32]) {
+		return errors.New("RP ID Hash in authData is not SHA-256 hash of the RP ID")
+	}
+
+	// 7.1.10
+	// Need bitwise operation
 
 	return nil
 }
