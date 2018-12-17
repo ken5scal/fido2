@@ -308,7 +308,7 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin strin
 	sha.Write(clientDataInBytes)
 	//hashOfClientData := hex.EncodeToString(sha.Sum(nil))
 
-	// 7.1.8
+	// 7.1.8 CBOR Decoding
 	cborByte := make([]byte, base64.RawURLEncoding.DecodedLen(len(s.AttestationObject)))
 	cborByte, err = base64.RawURLEncoding.DecodeString(s.AttestationObject)
 	if err != nil {
@@ -317,11 +317,12 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin strin
 
 	// TODO Not quite sure how to extract AttObj based on not yet decoded Format
 	ao := AttestationObject{}
+	//var ao interface{}
 	if err := codec.NewDecoderBytes(cborByte, new(codec.CborHandle)).Decode(&ao); err != nil {
 		return errors.Wrap(err, "failed cbor decoding AttestationObject")
 	}
 
-	// 7.1.9
+	// 7.1.9 Verifying that the RP ID hash in auth Data is sha256 of RP ID
 	// AuthData: https://www.w3.org/TR/webauthn/#authenticator-data
 	if len(ao.AuthData) < 37 {
 		return errors.New("AuthData must be 37 bytes or more")
@@ -332,8 +333,38 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin strin
 		return errors.New("RP ID Hash in authData is not SHA-256 hash of the RP ID")
 	}
 
-	// 7.1.10
-	// Need bitwise operation
+	// 7.1.10 Verify UP bit of the flags in authData is set
+	// 7.1.11 Verify UV bit of the flags in authData is set IF it is required
+	flags := ao.AuthData[32]
+	up := flags & (1 << 0) >> 0
+	uv := flags & (1 << 2) >> 2
+	//attestedClientData := flags & (1 << 6) >> 6
+	doesIncludeExtensions := flags & (1 << 7) >> 7
+
+	if up == 0 {
+		// https://www.w3.org/TR/webauthn/#test-of-user-presence
+		return errors.New("Requires user interaction with an authenticator (Not necessary has to be verification)")
+	}
+
+	if requiresUserVerification && uv == 0 {
+		return errors.New("Requires user verification by an authenticator.")
+	}
+
+	// 7.1.12 Verifying the client extension
+	if doesIncludeExtensions == 1 {
+		// TODO Study and implement extetion verification
+		// https://www.w3.org/TR/webauthn/#sctn-extension-id
+	}
+
+	// 7.1.13 Determine the attestation statement
+	switch ao.Fmt {
+	case "packed":
+	case "tpm":
+	case "android-key":
+	case "android-safetynet":
+	case "fido-u2f":
+	case "none":
+	}
 
 	return nil
 }
@@ -346,6 +377,7 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin strin
 // https://www.w3.org/TR/webauthn/#generating-an-attestation-object
 type AttestationObject struct {
 	Fmt string `codec:"fmt"`
+	//AttStmt []byte  `codec:"attStmt"`
 	AttStmt AttestationStmt `codec:"attStmt"`
 	AuthData []byte  `codec:"authData"`
 }

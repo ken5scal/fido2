@@ -23,6 +23,7 @@ var rp = "secure-brigate"
 var uuid = "S3932ee31vKEC0JtJMIQ"
 var userName = "kengoscal@gmail.com"
 var displayName = "ken5scal"
+var requiresUserVerification = true
 var challenge string
 var config Config
 
@@ -117,7 +118,7 @@ func main() {
 	fmt.Println(hex.Dump(cborByte))
 	fmt.Println(fmt.Sprintf("%x", cborByte))
 
-	var m2 interface{}
+	var m2 map[string]interface{}
 	err = codec.NewDecoderBytes(cborByte, new(codec.CborHandle)).Decode(&m2)
 	if err != nil {
 		log.Error().Err(err).Msg("failed decoding cbor")
@@ -151,7 +152,7 @@ func main() {
 	sha.Write([]byte(rp))
 	rpIdHash := sha.Sum(nil)
 
-	for k, v := range m2.(map[interface{}]interface{}) {
+	for k, v := range m2 {
 		fmt.Printf("%v: %v\n", k, v)
 		if k == "authData" {
 			fmt.Println(rpIdHash)
@@ -160,15 +161,47 @@ func main() {
 		}
 	}
 
+	if val, ok := m2["fmt"]; ok {
+		fmt.Println(val)
+	}
+
+	// Attestation Verification Procedure
+	// f(attStmt, authenticatorData, clientDataHash)
+	// Android SafetyNet Attestation Example ClientDataJSON: eyJjaGFsbGVuZ2UiOiJEa1hCdWRCa2wzTzBlTUV5SGZBTVgxT2tRbHV4c2hjaW9WU3dITVJMUlhtd044SXJldHg3cWJ0MWx3Y0p4d0FxWUU0SUxTZjVwd3lHMEhXSWtEekVMUT09Iiwib3JpZ2luIjoid2ViYXV0aG4ub3JnIiwiaGFzaEFsZyI6IlNIQS0yNTYifQ
+	// Authenticator Data: AttestationObject.AuthData: m2["authData"]
+	if val, ok := m2["attStmt"]; ok {
+		androidSafetyNetAttestationStmt := val.(map[interface{}]interface{})
+
+		if ver, ok := androidSafetyNetAttestationStmt["ver"]; ok {
+			fmt.Println(ver)
+		}
+
+		if res, ok := androidSafetyNetAttestationStmt["response"]; ok {
+			// Verify that response is a valid SafetyNet response of version ver
+			// Verify that the nonce in the response is identical to the SHA-256 hash of the concatenation of authenticatorData and clientDataHash
+			// Verify that the attestation certificate is issued to the hostname "attest.android.com"
+			// Verify that the ctsProfileMatch attribute in the payload of response is true
+			// If successful, return attestation type Basic with the attestation trust path set to the above attestation certificate
+			fmt.Println(res)
+		}
+	}
+
 	fmt.Println("================ Android SafetyNet attestation in struct ===============")
 	ao := AttestationObject{AttStmt: AndroidSafetyNetAttestationStmt{}}
+	//ao := AttestationObject{}
 	if err := codec.NewDecoderBytes(cborByte, new(codec.CborHandle)).Decode(&ao); err != nil {
 		log.Fatal().Err(err).Msg("failed decoding cbor")
 	}
 	fmt.Println("fmt: " + ao.Fmt)
 	fmt.Println("authData: %v", hex.Dump(ao.AuthData))
-	fmt.Println("ver: " + ao.AttStmt.(AndroidSafetyNetAttestationStmt).Ver)
-	fmt.Println("response: " + string(ao.AttStmt.(AndroidSafetyNetAttestationStmt).Response))
+	fmt.Println(fmt.Sprintf("AttStmt: %v", ao.AttStmt))
+	//androidSafetynetAttst := AndroidSafetyNetAttestationStmt{}
+	//ao.AttStmt.
+	//if err := codec.NewDecoderBytes(ao.AttStmt, new(codec.CborHandle)).Decode(&androidSafetynetAttst); err != nil {
+	//	log.Fatal().Err(err).Msg("failed decoding cbor")
+	//}
+	//fmt.Println("ver: " + ao.AttStmt.(AndroidSafetyNetAttestationStmt).Ver)
+	//fmt.Println("response: " + string(ao.AttStmt.(AndroidSafetyNetAttestationStmt).Response))
 
 	fmt.Println("rpIdHash in AuthData" + hex.EncodeToString(ao.AuthData[0:32]))
 	flags := ao.AuthData[32]
