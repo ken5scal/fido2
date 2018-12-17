@@ -261,7 +261,7 @@ const (
 // https://www.w3.org/TR/webauthn/#registering-a-new-credential
 var hashOfClientData string
 func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin string) error {
-	clientDataInBytes, err := base64.URLEncoding.DecodeString(s.ClientDataJSON)
+	clientDataInBytes, err := base64.RawURLEncoding.DecodeString(s.ClientDataJSON)
 	if err != nil {
 		return errors.New("Failed Decoding ClientDataJSON")
 	}
