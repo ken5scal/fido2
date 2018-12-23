@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -15,7 +16,8 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
-	"encoding/base64"
+	"crypto/x509"
+	"gopkg.in/square/go-jose.v2/jwt"
 )
 
 var rp = "secure-brigate"
@@ -27,9 +29,9 @@ var challenge string
 var config Config
 
 type Config struct {
-	Port uint
+	Port   uint
 	Origin string
-	Debug bool
+	Debug  bool
 }
 
 func init() {
@@ -136,12 +138,35 @@ func main() {
 		}
 
 		if res, ok := androidSafetyNetAttestationStmt["response"]; ok {
-			// Verify that response is a valid SafetyNet response of version ver
+			encodedRawJWS := string(res.([]byte))
+			token, err := jwt.ParseSigned(encodedRawJWS)
+			if err != nil {
+				log.Fatal().Err(err).Msg("failed parsing JWS")
+			}
+
+
+			// TODO Verify that response is a valid SafetyNet response of version ver
+
+
 			// Verify that the nonce in the response is identical to the SHA-256 hash of the concatenation of authenticatorData and clientDataHash
-			// Verify that the attestation certificate is issued to the hostname "attest.android.com"
+
+
 			// Verify that the ctsProfileMatch attribute in the payload of response is true
 			// If successful, return attestation type Basic with the attestation trust path set to the above attestation certificate
-			fmt.Println(res)
+
+
+			// Verify that the attestation certificate is issued to the hostname "attest.android.com"
+			rootCerts := x509.NewCertPool()
+			if ok := rootCerts.AppendCertsFromPEM([]byte(rootPEM));!ok {
+				panic("failed to parse root certificate")
+			}
+
+			if _, err := token.Headers[0].Certificates(x509.VerifyOptions{
+				Roots:   rootCerts,
+				DNSName: androidAttestationCertSubjectName,
+			}); err != nil {
+				log.Fatal().Err(err).Msg("failed verifying JWS")
+			}
 		}
 	}
 
@@ -154,13 +179,6 @@ func main() {
 	fmt.Println("fmt: " + ao.Fmt)
 	fmt.Println("authData: %v", hex.Dump(ao.AuthData))
 	fmt.Println(fmt.Sprintf("AttStmt: %v", ao.AttStmt))
-	//androidSafetynetAttst := AndroidSafetyNetAttestationStmt{}
-	//ao.AttStmt.
-	//if err := codec.NewDecoderBytes(ao.AttStmt, new(codec.CborHandle)).Decode(&androidSafetynetAttst); err != nil {
-	//	log.Fatal().Err(err).Msg("failed decoding cbor")
-	//}
-	//fmt.Println("ver: " + ao.AttStmt.(AndroidSafetyNetAttestationStmt).Ver)
-	//fmt.Println("response: " + string(ao.AttStmt.(AndroidSafetyNetAttestationStmt).Response))
 
 	fmt.Println("rpIdHash in AuthData" + hex.EncodeToString(ao.AuthData[0:32]))
 	flags := ao.AuthData[32]
@@ -168,16 +186,15 @@ func main() {
 	for i := uint(0); i < 8; i++ {
 		fmt.Println(flags & (1 << i) >> i)
 	}
-	fmt.Println("User Presence: " + fmt.Sprintf("%b",flags & (1 << 0) >> 0))
+	fmt.Println("User Presence: " + fmt.Sprintf("%b", flags&(1<<0)>>0))
 	// Bit1, 3-6
 	//fmt.Println("Reserved for future: " + fmt.Sprintf("%b",flags & (1 << 1) >> 1))
-	fmt.Println("User Verification: " + fmt.Sprintf("%b",flags & (1 << 2) >> 2))
-	fmt.Println("Attested Credential Data: " + fmt.Sprintf("%b",flags & (1 << 6) >> 6))
-	fmt.Println("Extension data included: " + fmt.Sprintf("%b",flags & (1 << 7) >> 7))
+	fmt.Println("User Verification: " + fmt.Sprintf("%b", flags&(1<<2)>>2))
+	fmt.Println("Attested Credential Data: " + fmt.Sprintf("%b", flags&(1<<6)>>6))
+	fmt.Println("Extension data included: " + fmt.Sprintf("%b", flags&(1<<7)>>7))
 	fmt.Println("signCount in AuthData" + hex.EncodeToString(ao.AuthData[33:37]))
 	//attestedCredentialData := ao.AuthData[37:xxxx] Length depends on https://www.w3.org/TR/webauthn/#attested-credential-data
 	//extentions := ao.AuthData[xxxx:yyyy] Length depends on https://www.w3.org/TR/webauthn/#extension-identifier
-
 
 	// HandlerFunc is a method of multiplexer (ServerMux)
 	// Handler implements ServeHTTP(ResponseWriter, *Request)

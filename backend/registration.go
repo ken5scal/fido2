@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"github.com/pkg/errors"
-	"unicode/utf8"
-	"encoding/hex"
 	"github.com/ugorji/go/codec"
+	"unicode/utf8"
 )
+
+const androidAttestationCertSubjectName = "attest.android.com"
 
 // ServerPublicKeyCredentialCreationOptionsRequest
 // https://fidoalliance.org/specs/fido-v2.0-rd-20180702/fido-server-v2.0-rd-20180702.html#serverpublickeycredentialcreationoptionsrequest
@@ -260,6 +262,7 @@ const (
 // WebAuthN: 7.1
 // https://www.w3.org/TR/webauthn/#registering-a-new-credential
 var hashOfClientData string
+
 func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin string) error {
 	clientDataInBytes, err := base64.RawURLEncoding.DecodeString(s.ClientDataJSON)
 	if err != nil {
@@ -378,8 +381,8 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin strin
 type AttestationObject struct {
 	Fmt string `codec:"fmt"`
 	//AttStmt []byte  `codec:"attStmt"`
-	AttStmt AttestationStmt `codec:"attStmt"`
-	AuthData []byte  `codec:"authData"`
+	AttStmt  AttestationStmt `codec:"attStmt"`
+	AuthData []byte          `codec:"authData"`
 }
 
 // AttestationStatement
@@ -393,7 +396,7 @@ type AttestationStmt interface {
 // AndroidKeyAttestation
 // https://www.w3.org/TR/webauthn/#android-key-attestation
 type AndroidKeyAttestationStmt struct {
-	Sig []byte `codec:"sig"`
+	Sig []byte   `codec:"sig"`
 	X5c [][]byte `codec:"x5c"`
 }
 
@@ -404,7 +407,7 @@ func (a AndroidKeyAttestationStmt) Verify() bool {
 // AndroidSafetyNetAttestationStmt
 // https://www.w3.org/TR/webauthn/#android-safetynet-attestation
 type AndroidSafetyNetAttestationStmt struct {
-	Ver string `codec:"ver"` // The version number of Google Play Services responsible for providing the SafetyNet API
+	Ver      string `codec:"ver"`      // The version number of Google Play Services responsible for providing the SafetyNet API
 	Response []byte `codec:"response"` //The UTF-8 encoded result of the getJwsResult() call of the SafetyNet API. This value is a JWS object
 }
 
