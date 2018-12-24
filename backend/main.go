@@ -172,29 +172,29 @@ func main() {
 	}
 
 	fmt.Println("================ Android SafetyNet attestation in struct ===============")
-	ao := AttestationObject{AttStmt: AndroidSafetyNetAttestationStmt{}}
+	//ao := AttestationObject{AttStmt: AndroidSafetyNetAttestationStmt{}}
 	//ao := AttestationObject{}
-	if err := codec.NewDecoderBytes(cborByte, new(codec.CborHandle)).Decode(&ao); err != nil {
-		log.Fatal().Err(err).Msg("failed decoding cbor")
-	}
-	fmt.Println("fmt: " + ao.Fmt)
-	fmt.Println("authData: ", hex.EncodeToString(ao.AuthData))
-	fmt.Println(fmt.Sprintf("Android SafetyNet Version: %v", ao.AttStmt.(AndroidSafetyNetAttestationStmt).Ver))
-	fmt.Println(fmt.Sprintf("Android SafetyNet Response: %s", ao.AttStmt.(AndroidSafetyNetAttestationStmt).Response))
-
-	fmt.Println("rpIdHash in AuthData" + hex.EncodeToString(ao.AuthData[0:32]))
-	flags := ao.AuthData[32]
-	fmt.Printf("%b\n", flags)
-	for i := uint(0); i < 8; i++ {
-		fmt.Println(flags & (1 << i) >> i)
-	}
-	fmt.Println("User Presence: " + fmt.Sprintf("%b", flags&(1<<0)>>0))
-	// Bit1, 3-6
-	//fmt.Println("Reserved for future: " + fmt.Sprintf("%b",flags & (1 << 1) >> 1))
-	fmt.Println("User Verification: " + fmt.Sprintf("%b", flags&(1<<2)>>2))
-	fmt.Println("Attested Credential Data: " + fmt.Sprintf("%b", flags&(1<<6)>>6))
-	fmt.Println("Extension data included: " + fmt.Sprintf("%b", flags&(1<<7)>>7))
-	fmt.Println("signCount in AuthData" + hex.EncodeToString(ao.AuthData[33:37]))
+	//if err := codec.NewDecoderBytes(cborByte, new(codec.CborHandle)).Decode(&ao); err != nil {
+	//	log.Fatal().Err(err).Msg("failed decoding cbor")
+	//}
+	//fmt.Println("fmt: " + ao.Fmt)
+	//fmt.Println("authData: ", hex.EncodeToString(ao.AuthData))
+	//fmt.Println(fmt.Sprintf("Android SafetyNet Version: %v", ao.AttStmt.(AndroidSafetyNetAttestationStmt).Ver))
+	//fmt.Println(fmt.Sprintf("Android SafetyNet Response: %s", ao.AttStmt.(AndroidSafetyNetAttestationStmt).Response))
+	//
+	//fmt.Println("rpIdHash in AuthData" + hex.EncodeToString(ao.AuthData[0:32]))
+	//flags := ao.AuthData[32]
+	//fmt.Printf("%b\n", flags)
+	//for i := uint(0); i < 8; i++ {
+	//	fmt.Println(flags & (1 << i) >> i)
+	//}
+	//fmt.Println("User Presence: " + fmt.Sprintf("%b", flags&(1<<0)>>0))
+	//// Bit1, 3-6
+	////fmt.Println("Reserved for future: " + fmt.Sprintf("%b",flags & (1 << 1) >> 1))
+	//fmt.Println("User Verification: " + fmt.Sprintf("%b", flags&(1<<2)>>2))
+	//fmt.Println("Attested Credential Data: " + fmt.Sprintf("%b", flags&(1<<6)>>6))
+	//fmt.Println("Extension data included: " + fmt.Sprintf("%b", flags&(1<<7)>>7))
+	//fmt.Println("signCount in AuthData" + hex.EncodeToString(ao.AuthData[33:37]))
 	//attestedCredentialData := ao.AuthData[37:xxxx] Length depends on https://www.w3.org/TR/webauthn/#attested-credential-data
 	//extentions := ao.AuthData[xxxx:yyyy] Length depends on https://www.w3.org/TR/webauthn/#extension-identifier
 

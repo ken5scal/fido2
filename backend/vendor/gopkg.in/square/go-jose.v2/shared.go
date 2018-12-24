@@ -192,13 +192,10 @@ func (h Header) Certificates(opts x509.VerifyOptions) ([][]*x509.Certificate, er
 	}
 
 	leaf := h.certificates[0]
-	fmt.Println("jwt----------")
-	fmt.Println(leaf.SerialNumber)
 	if opts.Intermediates == nil {
 		opts.Intermediates = x509.NewCertPool()
 		for _, intermediate := range h.certificates[1:] {
 			opts.Intermediates.AddCert(intermediate)
-			fmt.Println(intermediate.SerialNumber)
 		}
 	}
 

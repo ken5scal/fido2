@@ -9,6 +9,9 @@ import (
 	"encoding/json"
 	"github.com/pkg/errors"
 	"bytes"
+	"gopkg.in/square/go-jose.v2/jwt"
+	"crypto/x509"
+	"encoding/hex"
 )
 
 //============================================
@@ -19,7 +22,6 @@ import (
 // https://www.w3.org/TR/webauthn/#generating-an-attestation-object
 type AttestationObject struct {
 	Fmt string `codec:"fmt"`
-	//AttStmt []byte  `codec:"attStmt"`
 	AttStmt  AttestationStmt `codec:"attStmt"`
 	AuthData []byte          `codec:"authData"`
 }
@@ -29,7 +31,7 @@ type AttestationObject struct {
 // https://www.w3.org/TR/webauthn/#sctn-attstn-fmt-ids
 
 type AttestationStmt interface {
-	Verify() bool
+	Verify() error
 }
 
 // AndroidSafetyNetAttestationStmt
@@ -39,14 +41,65 @@ type AndroidSafetyNetAttestationStmt struct {
 	Response []byte `codec:"response"` //The UTF-8 encoded result of the getJwsResult() call of the SafetyNet API. This value is a JWS object
 }
 
-func (a AndroidSafetyNetAttestationStmt) Verify() bool {
-	return false
+// Verify verifies Android SafetyNet Attestation Statement
+// https://www.w3.org/TR/webauthn/#android-safetynet-attestation
+func (a AndroidSafetyNetAttestationStmt) Verify() error {
+	// Verify that attStmt is valid CBOR conforming to the syntax defined above and perform CBOR decoding on it to extract the contained fields.
+	// TODO
+
+	// Verify that response is a valid SafetyNet response of version ver.
+	// TODO
+
+	// Response is actually in JWS format
+	rawJWS := string(a.Response)
+	token, err := jwt.ParseSigned(rawJWS)
+	if err != nil {
+		return err
+	}
+
+	// Verify that the attestation certificate is issued to the hostname "attest.android.com"
+	rootCerts := x509.NewCertPool()
+	if ok := rootCerts.AppendCertsFromPEM([]byte(rootPEM)); !ok {
+		return errors.New("Failed to parse PEM encoded certificates")
+	}
+
+	opts := x509.VerifyOptions{
+		Roots: rootCerts,
+		DNSName: "attest.android.com",
+	}
+
+	// go-jose internally verify that attestationCert is issued to the hostname "attest.android.com"
+	attestationCert, err := token.Headers[0].Certificates(opts)
+	if err != nil {
+		return err
+	}
+
+	response := &AndroidSafetyNetAttestationResponse{}
+	if err := token.Claims(attestationCert[0][0].PublicKey, response); err != nil {
+		return err
+	}
+
+	// Verify that the nonce in the response is identical to the SHA-256 hash of the concatenation of authenticatorData and clientDataHash.
+	sha := sha256.New()
+	//sha.Write(append())
+	expectedNonce := sha.Sum(nil)
+	if response.Nonce != hex.EncodeToString(expectedNonce) {
+		errorMessage := "Nonce in Android SafetyNet Attestation Statement seems wrong\n"
+		errorMessage += fmt.Sprintf("Expected %x, but was %s", expectedNonce, response.Nonce)
+	}
+
+	// Verify that the ctsProfileMatch attribute in the payload of response is true
+	if !response.CtsProfileMatch {
+		return errors.New("CtsProfileMatch must be true")
+	}
+
+	return nil
 }
 
 type AndroidSafetyNetAttestationResponse struct {
 	Nonce                      string   `json:"nonce"`
 	TimestampMs                int64    `json:"timestampMs"`
-	ApkPackageName             string   `json:"apkPackageName"`
+	ApkPackageName             string   `fjson:"apkPackageName"`
 	ApkCertificateDigestSha256 []string `json:"apkCertificateDigestSha256"`
 	ApkDigestSha256            string `json:"apkDigestSha256"`
 	CtsProfileMatch            bool   `json:"ctsProfileMatch"`
@@ -56,7 +109,8 @@ type AndroidSafetyNetAttestationResponse struct {
 // ValidateClientData follows requirements from https://www.w3.org/TR/webauthn/#registering-a-new-credential
 // x.x.x represents each criteria
 // TODO challenge needs to be extracted from DB or some kind of data storage
-func (s ServerAuthenticatorAttestationResponse) ValidateClientData(challenge, origin string) ([]byte, error) {
+// https://github.com/ugorji/go/issues/277
+func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId string, requiresUserVerification bool) ([]byte, error) {
 	clientDataInBytes, err := base64.RawURLEncoding.DecodeString(s.ClientDataJSON)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("Failed to decode ClientDataJSON in Base64 URL format: %v", s.ClientDataJSON))
@@ -104,31 +158,15 @@ func (s ServerAuthenticatorAttestationResponse) ValidateClientData(challenge, or
 	sha.Write(clientDataInBytes)
 	hashOfClientData := sha.Sum(nil) // This value is used id 7.1.14
 
-	return hashOfClientData, nil
-}
-
-// ValidateAuthData follows requirements from https://www.w3.org/TR/webauthn/#registering-a-new-credential
-// x.x.x represents each criteria
-func (s ServerAuthenticatorAttestationResponse) ValidateAuthData(rpId string, requiresUserVerification bool) ([]byte, error) {
 	// 7.1.8
 	cborByte := make([]byte, base64.RawURLEncoding.DecodedLen(len(s.AttestationObject)))
-	cborByte, err := base64.RawURLEncoding.DecodeString(s.AttestationObject)
+	cborByte, err = base64.RawURLEncoding.DecodeString(s.AttestationObject)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed base64 url decoding AttestationObject")
 	}
 
-	ao := AttestationObject{}
-	// TODO Need to find a way to do like jws in go-jose.v2 because ao.attStmt would vary based on ao.fmt
-	// Make a fake "original" rawSignatureInfo to store the unprocessed
-	// Protected header. This is necessary because the Protected header can
-	// contain arbitrary fields not registered as part of the spec. See
-	// https://tools.ietf.org/html/draft-ietf-jose-json-web-signature-41#section-4
-	// If we unmarshal Protected into a rawHeader with its explicit list of fields,
-	// we cannot marshal losslessly. So we have to keep around the original bytes.
-	// This is used in computeAuthData, which will first attempt to use
-	// the original bytes of a protected header, and fall back on marshaling the
-	// header struct only if those bytes are not available.
-	ao.AttStmt = &AndroidSafetyNetAttestationStmt{}
+	// TODO Need to find a way to decode ao.attStmt because it would vary based on ao.fmt
+	ao := AttestationObject{AttStmt: AndroidSafetyNetAttestationStmt{}}
 	if err := codec.NewDecoderBytes(cborByte, new(codec.CborHandle)).Decode(&ao); err != nil {
 		return nil, errors.Wrap(err, "failed cbor decoding AttestationObject")
 	}
@@ -138,7 +176,7 @@ func (s ServerAuthenticatorAttestationResponse) ValidateAuthData(rpId string, re
 	if len(ao.AuthData) < 37 {
 		return nil, errors.New("AuthData must be 37 bytes or more")
 	}
-	sha := sha256.New()
+	sha = sha256.New()
 	sha.Write([]byte(rpId))
 	rpIdHash := sha.Sum(nil)
 
@@ -162,25 +200,93 @@ func (s ServerAuthenticatorAttestationResponse) ValidateAuthData(rpId string, re
 		return nil, errors.New("Requires user verification by an authenticator.")
 	}
 
-	//attestedClientData := flags & (1 << 6) >> 6
 	// 7.1.12 Verifying the client extension
 	// TODO Study and implement extetion verification
 	doesIncludeExtensions := flags & (1 << 7) >> 7 // https://www.w3.org/TR/webauthn/#sctn-extension-id
 	if doesIncludeExtensions == 1 {}
 
 	// 7.1.13 Determine the attestation statement
+	switch ao.Fmt {
 	// 7.1.14 Verify that attStmt is a correct attestation statement, conveying a valid attestation signature, by using the attestation statement format fmt’s verification procedure given attStmt, authData and the hash of the serialized client data computed in step 7.
 	// 7.1.15 If validation is successful, obtain a list of acceptable trust anchors (attestation root certificates or ECDAA-Issuer public keys) for that attestation type and attestation statement format fmt, from a trusted source or from policy.
 	// 7.1.16 Assess the attestation trustworthiness using the outputs of the verification procedure in step 14
-	// TODO 7.1.19 If the attestation statement attStmt successfully verified but is not trustworthy per step 16 above, the Relying Party SHOULD fail the registration ceremony.
-	switch ao.Fmt {
+		// If self attestation was used, check if self attestation is acceptable under Relying Party policy.
+		//  If ECDAA was used, verify that the identifier of the ECDAA-Issuer public key used is included in the set of acceptable trust anchors obtained in step 15.
+		// Otherwise, use the X.509 certificates returned by the verification procedure to verify that the attestation public key correctly chains up to an acceptable root certificate.
+	// 7.1.19 If the attestation statement attStmt successfully verified but is not trustworthy per step 16 above, the Relying Party SHOULD fail the registration ceremony.
 	case "packed":
 	case "tpm":
 	case "android-key":
-	case "android-safetynet":
+	case "android-safetynet": // https://www.w3.org/TR/webauthn/#android-safetynet-attestation
+		// 1) Verify that attStmt is valid CBOR conforming to the syntax defined above and perform CBOR decoding on it to extract the contained fields.
+		// TODO
+
+		// 2) Verify that response is a valid SafetyNet response of version ver.
+		// TODO Not quite how to do that.
+
+		// Response is actually in JWS format
+		rawJWS := string(ao.AttStmt.(AndroidSafetyNetAttestationStmt).Response)
+		token, err := jwt.ParseSigned(rawJWS)
+		if err != nil {
+			return nil, err
+		}
+
+		// 3) Verifying the nonce requires to retrieve response
+		// But, due to go-jose restriction, we first need to retrieve a certificate
+		// which actually required verifying certificate chain.
+		// 4) Verify that the attestation certificate is issued to the hostname "attest.android.com"
+		rootCerts := x509.NewCertPool()
+		if ok := rootCerts.AppendCertsFromPEM([]byte(rootPEM)); !ok {
+			return nil, errors.New("Failed to parse PEM encoded certificates")
+		}
+
+		opts := x509.VerifyOptions{
+			Roots: rootCerts,
+			DNSName: "attest.android.com",
+		}
+
+		// go-jose internally verify that attestationCert is issued to the hostname "attest.android.com"
+		// attestationCert
+		attestationCert, err := token.Headers[0].Certificates(opts)
+		if err != nil {
+			return nil, err
+		}
+
+		response := &AndroidSafetyNetAttestationResponse{}
+		if err := token.Claims(attestationCert[0][0].PublicKey, response); err != nil {
+			return nil, err
+		}
+
+		// 3) Verify that the nonce in the response is identical to the SHA-256 hash of the concatenation of authenticatorData and clientDataHash.
+		sha = sha256.New()
+		sha.Write(append(ao.AuthData, hashOfClientData...))
+		expectedNonce := sha.Sum(nil)
+		if response.Nonce != hex.EncodeToString(expectedNonce) {
+			errorMessage := "Nonce in Android SafetyNet Attestation Statement seems wrong\n"
+			errorMessage += fmt.Sprintf("Expected %x, but was %s", expectedNonce, response.Nonce)
+			// TODO Remove Comment later
+			// return nil, errors.New(errorMessage)
+		}
+
+		// Verify that the ctsProfileMatch attribute in the payload of response is true
+		if !response.CtsProfileMatch {
+			return nil, errors.New("CtsProfileMatch must be true")
+		}
 	case "fido-u2f":
 	case "none":
 	}
+
+	doesIncludeAttestedClientData := flags & (1 << 6) >> 6
+	if doesIncludeAttestedClientData == 1 {
+		//aaguid := ao.AuthData[37:53]
+		credentialIdLength := ao.AuthData[53:55]
+		credentialId := ao.AuthData[55:55+credentialIdLength[1]]
+		// 7.17
+		// TODO Check that the credentialId is not yet registered to any other user
+		// 7.18
+		// TODO Register user associating credentialId and credentialPublicKey
+	}
+
 
 	return nil, nil
 }

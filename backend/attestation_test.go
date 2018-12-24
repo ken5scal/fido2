@@ -5,8 +5,6 @@ import (
 	"fmt"
 )
 
-var ClientDataJSONEx2 = "eyJjaGFsbGVuZ2UiOiJEa1hCdWRCa2wzTzBlTUV5SGZBTVgxT2tRbHV4c2hjaW9WU3dITVJMUlhtd044SXJldHg3cWJ0MWx3Y0p4d0FxWUU0SUxTZjVwd3lHMEhXSWtEekVMUT09Iiwib3JpZ2luIjoid2ViYXV0aG4ub3JnIiwiaGFzaEFsZyI6IlNIQS0yNTYifQ"
-
 // 下記にある例はAndroid SafetyNetAttestationの証明書の有効期限がきれている。
 // https://fidoalliance.org/specs/fido-v2.0-rd-20180702/fido-server-v2.0-rd-20180702.html#validating-attestation
 // よって、こちらの例にあったものを使うべし -> https://medium.com/@herrjemand/verifying-fido2-safetynet-attestation-bd261ce1978d
@@ -21,16 +19,10 @@ var expectedOrigin = "https://webauthn.org"
 var expectedRpId = "webauthn.org"
 var expectedRequiresUserVerification = true
 
-func TestValidateClientData(t *testing.T) {
-	clientDataHash, err := attestationResponse.ValidateClientData(expectedChallenge, expectedOrigin)
-	if err != nil {
-		t.Error(err)
-	}
-	fmt.Println(fmt.Sprintf("client data sha256 hash: %x", clientDataHash))
-}
-
-func TestValidateAuthData(t *testing.T) {
-	_, err := attestationResponse.ValidateAuthData(expectedRpId, expectedRequiresUserVerification)
+func TestValidate(t *testing.T) {
+	fmt.Println("Because nonce in AttestationStatement of AttestationObject is not sha256 64 degits, this will be an error no matther what")
+	fmt.Println("44 digits -> I+RqS0uoxrImkv/S+6LXUzvJE6AQrD1xl0yKwx2mJI4=")
+	_, err := attestationResponse.Validate(expectedChallenge, expectedOrigin, expectedRpId, expectedRequiresUserVerification)
 	if err != nil {
 		t.Error(err)
 	}
