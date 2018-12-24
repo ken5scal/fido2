@@ -11,7 +11,6 @@ import (
 	"bytes"
 	"gopkg.in/square/go-jose.v2/jwt"
 	"crypto/x509"
-	"encoding/hex"
 )
 
 //============================================
@@ -44,55 +43,6 @@ type AndroidSafetyNetAttestationStmt struct {
 // Verify verifies Android SafetyNet Attestation Statement
 // https://www.w3.org/TR/webauthn/#android-safetynet-attestation
 func (a AndroidSafetyNetAttestationStmt) Verify() error {
-	// Verify that attStmt is valid CBOR conforming to the syntax defined above and perform CBOR decoding on it to extract the contained fields.
-	// TODO
-
-	// Verify that response is a valid SafetyNet response of version ver.
-	// TODO
-
-	// Response is actually in JWS format
-	rawJWS := string(a.Response)
-	token, err := jwt.ParseSigned(rawJWS)
-	if err != nil {
-		return err
-	}
-
-	// Verify that the attestation certificate is issued to the hostname "attest.android.com"
-	rootCerts := x509.NewCertPool()
-	if ok := rootCerts.AppendCertsFromPEM([]byte(rootPEM)); !ok {
-		return errors.New("Failed to parse PEM encoded certificates")
-	}
-
-	opts := x509.VerifyOptions{
-		Roots: rootCerts,
-		DNSName: "attest.android.com",
-	}
-
-	// go-jose internally verify that attestationCert is issued to the hostname "attest.android.com"
-	attestationCert, err := token.Headers[0].Certificates(opts)
-	if err != nil {
-		return err
-	}
-
-	response := &AndroidSafetyNetAttestationResponse{}
-	if err := token.Claims(attestationCert[0][0].PublicKey, response); err != nil {
-		return err
-	}
-
-	// Verify that the nonce in the response is identical to the SHA-256 hash of the concatenation of authenticatorData and clientDataHash.
-	sha := sha256.New()
-	//sha.Write(append())
-	expectedNonce := sha.Sum(nil)
-	if response.Nonce != hex.EncodeToString(expectedNonce) {
-		errorMessage := "Nonce in Android SafetyNet Attestation Statement seems wrong\n"
-		errorMessage += fmt.Sprintf("Expected %x, but was %s", expectedNonce, response.Nonce)
-	}
-
-	// Verify that the ctsProfileMatch attribute in the payload of response is true
-	if !response.CtsProfileMatch {
-		return errors.New("CtsProfileMatch must be true")
-	}
-
 	return nil
 }
 
@@ -156,7 +106,7 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 	// 7.1.7
 	sha := sha256.New()
 	sha.Write(clientDataInBytes)
-	hashOfClientData := sha.Sum(nil) // This value is used id 7.1.14
+	clientDataHash := sha.Sum(nil) // This value will be used in 7.1.14
 
 	// 7.1.8
 	cborByte := make([]byte, base64.RawURLEncoding.DecodedLen(len(s.AttestationObject)))
@@ -201,7 +151,7 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 	}
 
 	// 7.1.12 Verifying the client extension
-	// TODO Study and implement extetion verification
+	// TODO Study and implement extension verification
 	doesIncludeExtensions := flags & (1 << 7) >> 7 // https://www.w3.org/TR/webauthn/#sctn-extension-id
 	if doesIncludeExtensions == 1 {}
 
@@ -222,7 +172,7 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 		// TODO
 
 		// 2) Verify that response is a valid SafetyNet response of version ver.
-		// TODO Not quite how to do that.
+		// TODO Not quite sure what would be "valid SafetyNet response of version ver"
 
 		// Response is actually in JWS format
 		rawJWS := string(ao.AttStmt.(AndroidSafetyNetAttestationStmt).Response)
@@ -258,14 +208,16 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 		}
 
 		// 3) Verify that the nonce in the response is identical to the SHA-256 hash of the concatenation of authenticatorData and clientDataHash.
+		nonceBase := append(ao.AuthData, clientDataHash...)
 		sha = sha256.New()
-		sha.Write(append(ao.AuthData, hashOfClientData...))
-		expectedNonce := sha.Sum(nil)
-		if response.Nonce != hex.EncodeToString(expectedNonce) {
+		sha.Write(nonceBase)
+		nonceBuffer := sha.Sum(nil)
+		expectedNonce := base64.StdEncoding.EncodeToString(nonceBuffer)
+
+		if response.Nonce != expectedNonce {
 			errorMessage := "Nonce in Android SafetyNet Attestation Statement seems wrong\n"
-			errorMessage += fmt.Sprintf("Expected %x, but was %s", expectedNonce, response.Nonce)
-			// TODO Remove Comment later
-			// return nil, errors.New(errorMessage)
+			errorMessage += fmt.Sprintf("Expected %s, but was %s", expectedNonce, response.Nonce)
+			return nil, errors.New(errorMessage)
 		}
 
 		// Verify that the ctsProfileMatch attribute in the payload of response is true
@@ -279,8 +231,8 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 	doesIncludeAttestedClientData := flags & (1 << 6) >> 6
 	if doesIncludeAttestedClientData == 1 {
 		//aaguid := ao.AuthData[37:53]
-		credentialIdLength := ao.AuthData[53:55]
-		credentialId := ao.AuthData[55:55+credentialIdLength[1]]
+		//credentialIdLength := ao.AuthData[53:55]
+		//credentialId := ao.AuthData[55:55+credentialIdLength[1]]
 		// 7.17
 		// TODO Check that the credentialId is not yet registered to any other user
 		// 7.18
