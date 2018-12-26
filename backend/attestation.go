@@ -1,16 +1,16 @@
 package main
 
 import (
-	"encoding/base64"
-	"fmt"
-	"unicode/utf8"
-	"crypto/sha256"
-	"github.com/ugorji/go/codec"
-	"encoding/json"
-	"github.com/pkg/errors"
 	"bytes"
-	"gopkg.in/square/go-jose.v2/jwt"
+	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"github.com/pkg/errors"
+	"github.com/ugorji/go/codec"
+	"gopkg.in/square/go-jose.v2/jwt"
+	"unicode/utf8"
 )
 
 //============================================
@@ -20,7 +20,7 @@ import (
 // Attestation Object
 // https://www.w3.org/TR/webauthn/#generating-an-attestation-object
 type AttestationObject struct {
-	Fmt string `codec:"fmt"`
+	Fmt      string          `codec:"fmt"`
 	AttStmt  AttestationStmt `codec:"attStmt"`
 	AuthData []byte          `codec:"authData"`
 }
@@ -46,14 +46,31 @@ func (a AndroidSafetyNetAttestationStmt) Verify() error {
 	return nil
 }
 
+// AndroidSafetyNetAttestationResponse
+// https://developer.android.com/training/safetynet/attestation
 type AndroidSafetyNetAttestationResponse struct {
 	Nonce                      string   `json:"nonce"`
 	TimestampMs                int64    `json:"timestampMs"`
 	ApkPackageName             string   `fjson:"apkPackageName"`
 	ApkCertificateDigestSha256 []string `json:"apkCertificateDigestSha256"`
-	ApkDigestSha256            string `json:"apkDigestSha256"`
-	CtsProfileMatch            bool   `json:"ctsProfileMatch"`
-	BasicIntegrity            bool   `json:"basicIntegrity"`
+	ApkDigestSha256            string   `json:"apkDigestSha256"`
+	CtsProfileMatch            bool     `json:"ctsProfileMatch"`
+	BasicIntegrity             bool     `json:"basicIntegrity"`
+	Error                      string   `json:"error"`
+}
+
+// AndroidKeyAttestationStmt
+// https://www.w3.org/TR/webauthn/#android-key-attestation
+type AndroidKeyAttestationStmt struct {
+	Algorithm string   `codec:"alg"`
+	Signature []byte   `codec:"sig"`
+	X5c       [][]byte `codec:"x5c"` // x5c[0] = credCert, x5c[1...] = caCerts
+}
+
+// Verify verifies Android Key Attestation Statement
+// https://www.w3.org/TR/webauthn/#android-key-attestation
+func (a AndroidKeyAttestationStmt) Verify() error {
+	return nil
 }
 
 // ValidateClientData follows requirements from https://www.w3.org/TR/webauthn/#registering-a-new-credential
@@ -153,16 +170,17 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 	// 7.1.12 Verifying the client extension
 	// TODO Study and implement extension verification
 	doesIncludeExtensions := flags & (1 << 7) >> 7 // https://www.w3.org/TR/webauthn/#sctn-extension-id
-	if doesIncludeExtensions == 1 {}
+	if doesIncludeExtensions == 1 {
+	}
 
 	// 7.1.13 Determine the attestation statement
 	switch ao.Fmt {
 	// 7.1.14 Verify that attStmt is a correct attestation statement, conveying a valid attestation signature, by using the attestation statement format fmt’s verification procedure given attStmt, authData and the hash of the serialized client data computed in step 7.
 	// 7.1.15 If validation is successful, obtain a list of acceptable trust anchors (attestation root certificates or ECDAA-Issuer public keys) for that attestation type and attestation statement format fmt, from a trusted source or from policy.
 	// 7.1.16 Assess the attestation trustworthiness using the outputs of the verification procedure in step 14
-		// If self attestation was used, check if self attestation is acceptable under Relying Party policy.
-		//  If ECDAA was used, verify that the identifier of the ECDAA-Issuer public key used is included in the set of acceptable trust anchors obtained in step 15.
-		// Otherwise, use the X.509 certificates returned by the verification procedure to verify that the attestation public key correctly chains up to an acceptable root certificate.
+	// If self attestation was used, check if self attestation is acceptable under Relying Party policy.
+	//  If ECDAA was used, verify that the identifier of the ECDAA-Issuer public key used is included in the set of acceptable trust anchors obtained in step 15.
+	// Otherwise, use the X.509 certificates returned by the verification procedure to verify that the attestation public key correctly chains up to an acceptable root certificate.
 	// 7.1.19 If the attestation statement attStmt successfully verified but is not trustworthy per step 16 above, the Relying Party SHOULD fail the registration ceremony.
 	case "packed":
 	case "tpm":
@@ -173,6 +191,7 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 
 		// 2) Verify that response is a valid SafetyNet response of version ver.
 		// TODO Not quite sure what would be "valid SafetyNet response of version ver"
+		// https://developer.android.com/training/safetynet/attestation#check-gps-version
 
 		// Response is actually in JWS format
 		rawJWS := string(ao.AttStmt.(AndroidSafetyNetAttestationStmt).Response)
@@ -191,7 +210,7 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 		}
 
 		opts := x509.VerifyOptions{
-			Roots: rootCerts,
+			Roots:   rootCerts,
 			DNSName: "attest.android.com",
 		}
 
@@ -238,7 +257,6 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 		// 7.18
 		// TODO Register user associating credentialId and credentialPublicKey
 	}
-
 
 	return nil, nil
 }
