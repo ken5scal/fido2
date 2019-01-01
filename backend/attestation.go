@@ -7,10 +7,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"unicode/utf8"
+
 	"github.com/pkg/errors"
 	"github.com/ugorji/go/codec"
 	"gopkg.in/square/go-jose.v2/jwt"
-	"unicode/utf8"
 )
 
 //============================================
@@ -51,7 +52,7 @@ func (a AndroidSafetyNetAttestationStmt) Verify() error {
 type AndroidSafetyNetAttestationResponse struct {
 	Nonce                      string   `json:"nonce"`
 	TimestampMs                int64    `json:"timestampMs"`
-	ApkPackageName             string   `fjson:"apkPackageName"`
+	ApkPackageName             string   `json:"apkPackageName"`
 	ApkCertificateDigestSha256 []string `json:"apkCertificateDigestSha256"`
 	ApkDigestSha256            string   `json:"apkDigestSha256"`
 	CtsProfileMatch            bool     `json:"ctsProfileMatch"`
@@ -62,7 +63,7 @@ type AndroidSafetyNetAttestationResponse struct {
 // AndroidKeyAttestationStmt
 // https://www.w3.org/TR/webauthn/#android-key-attestation
 type AndroidKeyAttestationStmt struct {
-	Algorithm string   `codec:"alg"`
+	Algorithm int      `codec:"alg"`
 	Signature []byte   `codec:"sig"`
 	X5c       [][]byte `codec:"x5c"` // x5c[0] = credCert, x5c[1...] = caCerts
 }
@@ -133,7 +134,7 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 	}
 
 	// TODO Need to find a way to decode ao.attStmt because it would vary based on ao.fmt
-	ao := AttestationObject{AttStmt: AndroidSafetyNetAttestationStmt{}}
+	ao := AttestationObject{AttStmt: AndroidKeyAttestationStmt{}}
 	if err := codec.NewDecoderBytes(cborByte, new(codec.CborHandle)).Decode(&ao); err != nil {
 		return nil, errors.Wrap(err, "failed cbor decoding AttestationObject")
 	}
@@ -184,8 +185,27 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 	// 7.1.19 If the attestation statement attStmt successfully verified but is not trustworthy per step 16 above, the Relying Party SHOULD fail the registration ceremony.
 	case "packed":
 	case "tpm":
-	case "android-key":
+	case "android-key": // https://www.w3.org/TR/webauthn/#android-key-attestation
+		stmt := ao.AttStmt.(AndroidKeyAttestationStmt)
+
+		// 1) Verify that attStmt is valid CBOR conforming to the syntax defined above and perform CBOR decoding on it to extract the contained fields.
+		// TODO
+
+		// 2) Verify that sig is a valid signature over the concatenation of authenticatorData and clientDataHash using the public key in the first certificate in x5c with the algorithm specified in alg
+		signed := append(ao.AuthData, clientDataHash...)
+		leafCert, err := x509.ParseCertificate(stmt.X5c[0])
+		if err != nil {
+			return nil, errors.New("Failed to parse PEM encoded certificates")
+		}
+
+		if err := leafCert.CheckSignature(leafCert.SignatureAlgorithm, signed, stmt.Signature); err != nil {
+			return nil, errors.Wrap(err, "Failed to verify a signature over the concatenation of authenticatorData and clientDataHash using the public key in the first certificate in x5c with the algorithm specified in alg")
+		}
+
+		return nil, nil
+
 	case "android-safetynet": // https://www.w3.org/TR/webauthn/#android-safetynet-attestation
+		fmt.Println(ao.AttStmt)
 		// 1) Verify that attStmt is valid CBOR conforming to the syntax defined above and perform CBOR decoding on it to extract the contained fields.
 		// TODO
 
@@ -205,7 +225,7 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 		// which actually required verifying certificate chain.
 		// 4) Verify that the attestation certificate is issued to the hostname "attest.android.com"
 		rootCerts := x509.NewCertPool()
-		if ok := rootCerts.AppendCertsFromPEM([]byte(rootPEM)); !ok {
+		if ok := rootCerts.AppendCertsFromPEM([]byte(androidSafetyNetAuthenticatorRootPEM)); !ok {
 			return nil, errors.New("Failed to parse PEM encoded certificates")
 		}
 
