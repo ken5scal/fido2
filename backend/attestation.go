@@ -7,7 +7,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"unicode/utf8"
+
+	"crypto/ecdsa"
+
+	"encoding/asn1"
 
 	"github.com/pkg/errors"
 	"github.com/ugorji/go/codec"
@@ -72,6 +77,59 @@ type AndroidKeyAttestationStmt struct {
 // https://www.w3.org/TR/webauthn/#android-key-attestation
 func (a AndroidKeyAttestationStmt) Verify() error {
 	return nil
+}
+
+type AndroidKeyAttestationExtensionSchema struct {
+	AttestationVersion int `asn1`
+	// Need Help
+	// AttestationSecurityLevelは0,1なEnumの値であるが、それ専用のEnumを割り与えてもDecodeできなかった
+	AttestationSecurityLevel asn1.Enumerated                        `asn1:"enum"` // 0-> Software, 1-> TEE
+	KeymasterVersion         int                                    `asn1`
+	KeymasterSecurityLevel   asn1.Enumerated                        `asn1:"enum"`
+	AttestationChallenge     []byte                                 `asn1`
+	UniqueId                 []byte                                 `asn1`
+	SoftwareEnforced         AndroidKeyAttestationAuthorizationList `asn1`
+	TeeEnforced              AndroidKeyAttestationAuthorizationList `asn1`
+}
+
+type AndroidKeyAttestationAuthorizationList struct {
+	Purpose                   []int       `asn1:"explicit,optional,set"`
+	Algorithm                 int         `asn1:"explicit,optional"`
+	KeySize                   int         `asn1:"explicit,optional"`
+	Digest                    []int       `asn1:"explicit,optional,set"`
+	Padding                   []int       `asn1:"explicit,optional,set"`
+	EcCurve                   int         `asn1:"explicit,optional"`
+	RsaPublicExponent         int         `asn1:"explicit,optional"`
+	ActiveDateTime            int         `asn1:"explicit,optional"`
+	OriginationExpireDateTime int         `asn1:"explicit,optional"`
+	UsageExpireDateTime       int         `asn1:"explicit,optional"`
+	NoAuthRequired            int         `asn1:"explicit,optional"` //ExplicitNullOption?
+	UserAuthType              int         `asn1:"explicit,optional"`
+	AuthTimeout               int         `asn1:"explicit,optional"`
+	AllowWhileOnBody          int         `asn1:"explicit,optional"`      //ExplicitNullOption?
+	AllApplications           int         `asn1:"explicit,null,optional"` //ExplicitNullOption?
+	ApplicationId             int         `asn1:"explicit,optional"`
+	CreationDateTime          int         `asn1:"explicit,optional"`
+	Origin                    int         `asn1:"explicit,optional"`
+	RollbackResistant         int         `asn1:"explicit,optional"` //ExplicitNullOption?
+	RootOfTrust               RootOfTrust `asn1:"explicit,optional"`
+	OsVersion                 int         `asn1:"explicit,optional"`
+	OsPatchLevel              int         `asn1:"explicit,optional"`
+	AttestationApplicationId  []byte      `asn1:"explicit,optional"`
+	AttestationIdBrand        []byte      `asn1:"explicit,optional"`
+	AttestationIdDevice       []byte      `asn1:"explicit,optional"`
+	AttestationIdProduct      []byte      `asn1:"explicit,optional"`
+	AttestationIdSerial       []byte      `asn1:"explicit,optional"`
+	AttestationIdImei         []byte      `asn1:"explicit,optional"`
+	AttestationIdMeid         []byte      `asn1:"explicit,optional"`
+	AttestationIdManufacturer []byte      `asn1:"explicit,optional"`
+	AttestationIdModel        []byte      `asn1:"explicit,optional"`
+}
+
+type RootOfTrust struct {
+	VerifiedBootKey   []byte          `asn1:"optional"`
+	DeviceLocked      bool            `asn1:"optional"`
+	VerifiedBootState asn1.Enumerated `asn1:"optional, enum"` // 0 -> Verified, 1 -> SelfSigned, 2 -> Unverified, 3 -> Failed
 }
 
 // ValidateClientData follows requirements from https://www.w3.org/TR/webauthn/#registering-a-new-credential
@@ -174,6 +232,12 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 	if doesIncludeExtensions == 1 {
 	}
 
+	// They will be used later
+	doesIncludeAttestedClientData := flags & (1 << 6) >> 6
+	//aaguid := ao.AuthData[37:53]
+	credentialIdLength := ao.AuthData[53:55]
+	//credentialId := ao.AuthData[55 : 55+credentialIdLength[1]]
+
 	// 7.1.13 Determine the attestation statement
 	switch ao.Fmt {
 	// 7.1.14 Verify that attStmt is a correct attestation statement, conveying a valid attestation signature, by using the attestation statement format fmt’s verification procedure given attStmt, authData and the hash of the serialized client data computed in step 7.
@@ -193,6 +257,7 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 
 		// 2) Verify that sig is a valid signature over the concatenation of authenticatorData and clientDataHash using the public key in the first certificate in x5c with the algorithm specified in alg
 		signed := append(ao.AuthData, clientDataHash...)
+
 		leafCert, err := x509.ParseCertificate(stmt.X5c[0])
 		if err != nil {
 			return nil, errors.New("Failed to parse PEM encoded certificates")
@@ -202,8 +267,54 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 			return nil, errors.Wrap(err, "Failed to verify a signature over the concatenation of authenticatorData and clientDataHash using the public key in the first certificate in x5c with the algorithm specified in alg")
 		}
 
-		return nil, nil
+		// 3) Verify that the public key in the first certificate in in x5c matches the credentialPublicKey in the attestedCredentialData in authenticatorData
+		//TODO This is ignoring the fact that cosePublicKeyInByte is not fixed length while possibly having extension Data followed by cosePublicKeyInByte
+		//NEED HELP
+		cosePublicKeyInByte := ao.AuthData[55+credentialIdLength[1]:]
+		var coseKey map[int]interface{}
+		if err := codec.NewDecoderBytes(cosePublicKeyInByte, new(codec.CborHandle)).Decode(&coseKey); err != nil {
+			return nil, errors.Wrap(err, "failed cbor decoding AttestationObject")
+		}
 
+		// COSE Key Common Parameters: https://www.iana.org/assignments/cose/cose.xhtml#key-type-parameters
+		// COSE KEY Types: https://www.iana.org/assignments/cose/cose.xhtml#key-type-parameters
+		switch pub := leafCert.PublicKey.(type) { // https://www.iana.org/assignments/cose/cose.xhtml#algorithms
+		case *ecdsa.PublicKey:
+			// TODO Not Quite sure if this is the right approach
+			isOnCurve := pub.IsOnCurve(
+				//-2 and -3 comes EC2 Key Types -> https://tools.ietf.org/html/rfc8152#section-13.1
+				new(big.Int).SetBytes(coseKey[-2].([]byte)), //x
+				new(big.Int).SetBytes(coseKey[-3].([]byte))) //y
+			if !isOnCurve {
+				return nil, errors.New("The public key in the leaf certificate does not match the `credentialPublicKey` in the `attestedCredentialData` in `authenticatorData`.")
+			}
+		}
+
+		// 4) Verify that in the attestation certificate extension data
+		for _, v := range leafCert.Extensions {
+			if v.Id.Equal(androidKeyAttestationOID) {
+				var extensions AndroidKeyAttestationExtensionSchema
+				if _, err := asn1.Unmarshal(v.Value, &extensions); err != nil {
+					fmt.Println(err)
+				}
+
+				// 4-1) The value of the attestationChallenge field is identical to clientDataHash.
+				if !bytes.Equal(extensions.AttestationChallenge, clientDataHash) {
+					return nil, errors.New("Failed to verify that tThe value of the attestationChallenge field is identical to clientDataHash")
+				}
+
+				// 4-2) The AuthorizationList.allApplications field is not present, since PublicKeyCredential MUST be bound to the RP ID.
+				fmt.Println(extensions.SoftwareEnforced.AllApplications)
+			}
+		}
+		if !false {
+			return nil, errors.New("Not finished to Verify that in the attestation certificate extension data")
+		}
+
+		// 4-3) The value in the AuthorizationList.origin field is equal to KM_TAG_GENERATED.
+		// 4-4) The value in the AuthorizationList.purpose field is equal to KM_PURPOSE_SIGN.
+
+		return nil, nil
 	case "android-safetynet": // https://www.w3.org/TR/webauthn/#android-safetynet-attestation
 		fmt.Println(ao.AttStmt)
 		// 1) Verify that attStmt is valid CBOR conforming to the syntax defined above and perform CBOR decoding on it to extract the contained fields.
@@ -267,11 +378,8 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 	case "none":
 	}
 
-	doesIncludeAttestedClientData := flags & (1 << 6) >> 6
+	doesIncludeAttestedClientData = flags & (1 << 6) >> 6
 	if doesIncludeAttestedClientData == 1 {
-		//aaguid := ao.AuthData[37:53]
-		//credentialIdLength := ao.AuthData[53:55]
-		//credentialId := ao.AuthData[55:55+credentialIdLength[1]]
 		// 7.17
 		// TODO Check that the credentialId is not yet registered to any other user
 		// 7.18
