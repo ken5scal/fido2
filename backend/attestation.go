@@ -83,53 +83,82 @@ type AndroidKeyAttestationExtensionSchema struct {
 	AttestationVersion int `asn1`
 	// Need Help
 	// AttestationSecurityLevelは0,1なEnumの値であるが、それ専用のEnumを割り与えてもDecodeできなかった
-	AttestationSecurityLevel asn1.Enumerated                        `asn1:"enum"` // 0-> Software, 1-> TEE
-	KeymasterVersion         int                                    `asn1`
-	KeymasterSecurityLevel   asn1.Enumerated                        `asn1:"enum"`
-	AttestationChallenge     []byte                                 `asn1`
-	UniqueId                 []byte                                 `asn1`
-	SoftwareEnforced         AndroidKeyAttestationAuthorizationList `asn1`
-	TeeEnforced              AndroidKeyAttestationAuthorizationList `asn1`
+	AttestationSecurityLevel asn1.Enumerated `asn1:"enum"` // 0-> Software, 1-> TEE
+	KeymasterVersion         int             `asn1`
+	KeymasterSecurityLevel   asn1.Enumerated `asn1:"enum"`
+	AttestationChallenge     []byte          `asn1`
+	UniqueId                 []byte          `asn1`
+	SoftwareEnforced         asn1.RawValue   `asn1`
+	TeeEnforced              asn1.RawValue   `asn1`
 }
 
 type AndroidKeyAttestationAuthorizationList struct {
-	Purpose                   []int       `asn1:"explicit,optional,set"`
-	Algorithm                 int         `asn1:"explicit,optional"`
-	KeySize                   int         `asn1:"explicit,optional"`
-	Digest                    []int       `asn1:"explicit,optional,set"`
-	Padding                   []int       `asn1:"explicit,optional,set"`
-	EcCurve                   int         `asn1:"explicit,optional"`
-	RsaPublicExponent         int         `asn1:"explicit,optional"`
-	ActiveDateTime            int         `asn1:"explicit,optional"`
-	OriginationExpireDateTime int         `asn1:"explicit,optional"`
-	UsageExpireDateTime       int         `asn1:"explicit,optional"`
-	NoAuthRequired            int         `asn1:"explicit,optional"` //ExplicitNullOption?
-	UserAuthType              int         `asn1:"explicit,optional"`
-	AuthTimeout               int         `asn1:"explicit,optional"`
-	AllowWhileOnBody          int         `asn1:"explicit,optional"`      //ExplicitNullOption?
-	AllApplications           int         `asn1:"explicit,null,optional"` //ExplicitNullOption?
-	ApplicationId             int         `asn1:"explicit,optional"`
-	CreationDateTime          int         `asn1:"explicit,optional"`
-	Origin                    int         `asn1:"explicit,optional"`
-	RollbackResistant         int         `asn1:"explicit,optional"` //ExplicitNullOption?
-	RootOfTrust               RootOfTrust `asn1:"explicit,optional"`
-	OsVersion                 int         `asn1:"explicit,optional"`
-	OsPatchLevel              int         `asn1:"explicit,optional"`
-	AttestationApplicationId  []byte      `asn1:"explicit,optional"`
-	AttestationIdBrand        []byte      `asn1:"explicit,optional"`
-	AttestationIdDevice       []byte      `asn1:"explicit,optional"`
-	AttestationIdProduct      []byte      `asn1:"explicit,optional"`
-	AttestationIdSerial       []byte      `asn1:"explicit,optional"`
-	AttestationIdImei         []byte      `asn1:"explicit,optional"`
-	AttestationIdMeid         []byte      `asn1:"explicit,optional"`
-	AttestationIdManufacturer []byte      `asn1:"explicit,optional"`
-	AttestationIdModel        []byte      `asn1:"explicit,optional"`
+	//Purpose                   []int       `asn1:"optional,set"` //1
+	//Algorithm                 int         `asn1:"optional"`     //2
+	//KeySize                   int         `asn1:"optional"`     //3
+	//Digest                    []int       `asn1:"optional,set"` //5
+	//Padding                   []int       `asn1:"optional,set"` //6
+	//EcCurve                   int         `asn1:"optional"`     //10
+	//RsaPublicExponent         int         `asn1:"optional"`     //200
+	ActiveDateTime            int `asn1:"tag:400,explicit"` //400
+	OriginationExpireDateTime int `asn1:"tag:401,explicit"` //401
+	UsageExpireDateTime       int `asn1:"tag:402,explicit"` //402
+	//NoAuthRequired            int         `asn1:"optional"` //503 //Because this can be nil
+	//UserAuthType              int         `asn1:"optional"` //504
+	//AuthTimeout               int         `asn1:"optional"` //505
+	//AllowWhileOnBody          int         `asn1:"optional"` //506 //Because this can be nil
+	//AllApplications           int         `asn1:"optional"` //600 Because this can be nil
+	//ApplicationId             []byte      `asn1:"optional"` //601
+	CreationDateTime int `asn1:"tag:701,explicit"` //701
+	//Origin                   int         `asn1:"optional"` //702
+	//RollbackResistant        int         `asn1:"optional"` //703 //ExplicitNullOption?
+	//RootOfTrust              RootOfTrust `asn1:"optional"` //704
+	//OsVersion                int         `asn1:"optional"` //705
+	//OsPatchLevel             int         `asn1:"optional"` //706
+	//AttestationChallenge     int         `asn1:"optional"` //708
+	AttestationApplicationId []byte `asn1:"tag:709,explicit"` //709
+	//attestationApplicationId   [709] EXPLICIT OCTET_STRING OPTIONAL, # KM3
+	//attestationIdBrand         [710] EXPLICIT OCTET_STRING OPTIONAL, # KM3
+	//attestationIdDevice        [711] EXPLICIT OCTET_STRING OPTIONAL, # KM3
+	//attestationIdProduct       [712] EXPLICIT OCTET_STRING OPTIONAL, # KM3
+	//attestationIdSerial        [713] EXPLICIT OCTET_STRING OPTIONAL, # KM3
+	//attestationIdImei          [714] EXPLICIT OCTET_STRING OPTIONAL, # KM3
+	//attestationIdMeid          [715] EXPLICIT OCTET_STRING OPTIONAL, # KM3
+	//attestationIdManufacturer  [716] EXPLICIT OCTET_STRING OPTIONAL, # KM3
+	//attestationIdModel         [717] EXPLICIT OCTET_STRING OPTIONAL, # KM3
 }
 
 type RootOfTrust struct {
 	VerifiedBootKey   []byte          `asn1:"optional"`
 	DeviceLocked      bool            `asn1:"optional"`
-	VerifiedBootState asn1.Enumerated `asn1:"optional, enum"` // 0 -> Verified, 1 -> SelfSigned, 2 -> Unverified, 3 -> Failed
+	VerifiedBootState asn1.Enumerated `asn1:"optional,enum"` // 0 -> Verified, 1 -> SelfSigned, 2 -> Unverified, 3 -> Failed
+}
+
+type AuthorizationList struct {
+	Purpose                   asn1.RawValue `asn1:"set,optional"`
+	Algorithm                 asn1.RawValue `asn1:"explicit,optional"`
+	KeySize                   asn1.RawValue `asn1:"optional"`
+	Digest                    asn1.RawValue `asn1:"set,optional"`
+	Padding                   asn1.RawValue `asn1:"set,optional"`
+	EcCurve                   asn1.RawValue `asn1:"optional"`
+	RsaPublicExponent         asn1.RawValue `asn1:"optional"`
+	ActiveDateTime            asn1.RawValue `asn1:"optional"`
+	OriginationExpireDateTime asn1.RawValue `asn1:"optional"`
+	UsageExpireDateTime       asn1.RawValue `asn1:"optional"`
+	NoAuthRequired            asn1.RawValue `asn1:"optional"`
+	UserAuthType              asn1.RawValue `asn1:"optional"`
+	AuthTimeout               asn1.RawValue `asn1:"optional"`
+	AllowWhileOnBody          asn1.RawValue `asn1:"optional"`
+	AllApplications           asn1.RawValue `asn1:"optional"`
+	ApplicationId             asn1.RawValue `asn1:"optional"`
+	CreationDateTime          asn1.RawValue `asn1:"optional"`
+	Origin                    asn1.RawValue `asn1:"optional"`
+	RollbackResistant         asn1.RawValue `asn1:"optional"`
+	RootOfTrust               asn1.RawValue `asn1:"optional"`
+	OsVersion                 asn1.RawValue `asn1:"optional"`
+	OsPatchLevel              asn1.RawValue `asn1:"optional"`
+	AttestationChallenge      asn1.RawValue `asn1:"optional"`
+	AttestationApplicationId  asn1.RawValue `asn1:"optional"`
 }
 
 // ValidateClientData follows requirements from https://www.w3.org/TR/webauthn/#registering-a-new-credential
@@ -295,24 +324,93 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 			if v.Id.Equal(androidKeyAttestationOID) {
 				var extensions AndroidKeyAttestationExtensionSchema
 				if _, err := asn1.Unmarshal(v.Value, &extensions); err != nil {
-					fmt.Println(err)
+					return nil, errors.Wrap(err, "Failed to decode certificate extension into asn1 sequence")
 				}
-
+				fmt.Println(fmt.Sprintf("%x", v.Value))
+				fmt.Println(extensions.AttestationVersion)
+				fmt.Println(extensions.KeymasterVersion)
 				// 4-1) The value of the attestationChallenge field is identical to clientDataHash.
 				if !bytes.Equal(extensions.AttestationChallenge, clientDataHash) {
-					return nil, errors.New("Failed to verify that tThe value of the attestationChallenge field is identical to clientDataHash")
+					return nil, errors.New("Failed to verify that the value of the attestationChallenge field is identical to clientDataHash")
 				}
 
+				fmt.Println(extensions.SoftwareEnforced)
+				fmt.Println(extensions.TeeEnforced)
+				fmt.Println(fmt.Sprintf("%x", extensions.SoftwareEnforced.FullBytes))
+				fmt.Println(fmt.Sprintf("%x", extensions.TeeEnforced.FullBytes))
 				// 4-2) The AuthorizationList.allApplications field is not present, since PublicKeyCredential MUST be bound to the RP ID.
-				fmt.Println(extensions.SoftwareEnforced.AllApplications)
+				fmt.Println("=================================================")
+				fmt.Println("============= Sw Enforced Checking ==============")
+				fmt.Println("=================================================")
+
+				fmt.Println("============= fuga ==============")
+				var fuga AuthorizationList
+				if _, err := asn1.Unmarshal(extensions.SoftwareEnforced.FullBytes, &fuga); err != nil {
+					return nil, errors.Wrap(err, "bbbbbbbb")
+				}
+				fmt.Println(fuga)
+
+				fmt.Println("============= hoge ==============")
+				var hoge AndroidKeyAttestationAuthorizationList
+				if _, err := asn1.Unmarshal(extensions.SoftwareEnforced.FullBytes, &hoge); err != nil {
+					return nil, errors.Wrap(err, "bbbbbbbb")
+				}
+				fmt.Println(hoge)
+				//fmt.Println(fmt.Sprintf("1: %v:", hoge.Purpose))
+				//fmt.Println(fmt.Sprintf("2: %v:", hoge.Algorithm))
+				//fmt.Println(fmt.Sprintf("3: %v:", hoge.KeySize))
+				//fmt.Println(fmt.Sprintf("5: %v:", hoge.Digest))
+				//fmt.Println(fmt.Sprintf("10: %v:", hoge.EcCurve))
+				fmt.Println(fmt.Sprintf("400: %v:", hoge.ActiveDateTime))
+				fmt.Println(fmt.Sprintf("401: %v:", hoge.OriginationExpireDateTime))
+				fmt.Println(fmt.Sprintf("402: %v:", hoge.UsageExpireDateTime))
+				//fmt.Println(fmt.Sprintf("504: %v:", hoge.UserAuthType))
+				//fmt.Println(fmt.Sprintf("505: %v:", hoge.AuthTimeout))
+				fmt.Println(fmt.Sprintf("701: %v:", hoge.CreationDateTime))
+				//fmt.Println(fmt.Sprintf("702: %v:", hoge.Origin))
+				fmt.Println(fmt.Sprintf("709: %v:", hoge.AttestationApplicationId))
+
+				fmt.Println("==================================================")
+				fmt.Println("============= Tee Enforced Checking ==============")
+				fmt.Println("==================================================")
+				if _, err := asn1.Unmarshal(extensions.TeeEnforced.FullBytes, &hoge); err != nil {
+					return nil, errors.Wrap(err, "aaaaaaaaaa")
+				}
+
+				fmt.Println("============= hoge ==============")
+				fmt.Println(hoge)
+				//fmt.Println(fmt.Sprintf("1: %v:", hoge.Purpose))
+				//fmt.Println(fmt.Sprintf("2: %v:", hoge.Algorithm))
+				//fmt.Println(fmt.Sprintf("3: %v:", hoge.KeySize))
+				//fmt.Println(fmt.Sprintf("5: %v:", hoge.Digest))
+				//fmt.Println(fmt.Sprintf("10: %v:", hoge.EcCurve))
+				fmt.Println(fmt.Sprintf("400: %v:", hoge.ActiveDateTime))
+				fmt.Println(fmt.Sprintf("401: %v:", hoge.OriginationExpireDateTime))
+				fmt.Println(fmt.Sprintf("402: %v:", hoge.UsageExpireDateTime))
+				//fmt.Println(fmt.Sprintf("504: %v:", hoge.UserAuthType))
+				//fmt.Println(fmt.Sprintf("505: %v:", hoge.AuthTimeout))
+				fmt.Println(fmt.Sprintf("701: %v:", hoge.CreationDateTime))
+				//fmt.Println(fmt.Sprintf("702: %v:", hoge.Origin))
+				fmt.Println(fmt.Sprintf("709: %v:", hoge.AttestationApplicationId))
+
+				if _, err := asn1.Unmarshal(extensions.TeeEnforced.FullBytes, &fuga); err != nil {
+					return nil, errors.Wrap(err, "aaaaaaaaaa")
+				}
+				fmt.Println("============= fuga ==============")
+				fmt.Println(fuga)
+
+				//fmt.Println(extensions.TeeEnforced)
+				//if extensions.SoftwareEnforced[0].AllApplications != nil || extensions.TeeEnforced[0].AllApplications != nil {
+				//	return nil, errors.New("AuthorizationList.allApplications field is supposed to be not present")
+				//}
+
+				// 4-3) The value in the AuthorizationList.origin field is equal to KM_TAG_GENERATED.
+				// 4-4) The value in the AuthorizationList.purpose field is equal to KM_PURPOSE_SIGN.
 			}
 		}
 		if !false {
 			return nil, errors.New("Not finished to Verify that in the attestation certificate extension data")
 		}
-
-		// 4-3) The value in the AuthorizationList.origin field is equal to KM_TAG_GENERATED.
-		// 4-4) The value in the AuthorizationList.purpose field is equal to KM_PURPOSE_SIGN.
 
 		return nil, nil
 	case "android-safetynet": // https://www.w3.org/TR/webauthn/#android-safetynet-attestation
@@ -387,4 +485,24 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 	}
 
 	return nil, nil
+}
+
+type Tsr struct {
+	Result struct {
+		Code   int
+		Detail struct{ Message string }
+	}
+	SignedData struct {
+		OID  asn1.ObjectIdentifier
+		Zero struct {
+			Seq struct {
+				Int int
+				Set struct {
+					InnerSeq struct {
+						OID asn1.ObjectIdentifier
+					}
+				} `asn1:"set"`
+			}
+		} `asn1:"tag:0"`
+	}
 }
