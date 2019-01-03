@@ -19,10 +19,20 @@ import (
 	"gopkg.in/square/go-jose.v2/jwt"
 )
 
+type AttestationType int
+
+const (
+	_ AttestationType = iota
+	Basic
+	Self
+	AttCA
+	ECDAA
+	NoneAttType //None is already used
+)
+
 //============================================
 // Attestation Object
 //============================================
-
 // Attestation Object
 // https://www.w3.org/TR/webauthn/#generating-an-attestation-object
 type AttestationObject struct {
@@ -83,49 +93,48 @@ type AndroidKeyAttestationExtensionSchema struct {
 	AttestationVersion int `asn1`
 	// Need Help
 	// AttestationSecurityLevelは0,1なEnumの値であるが、それ専用のEnumを割り与えてもDecodeできなかった
-	AttestationSecurityLevel asn1.Enumerated `asn1:"enum"` // 0-> Software, 1-> TEE
-	KeymasterVersion         int             `asn1`
-	KeymasterSecurityLevel   asn1.Enumerated `asn1:"enum"`
-	AttestationChallenge     []byte          `asn1`
-	UniqueId                 []byte          `asn1`
-	SoftwareEnforced         asn1.RawValue   `asn1`
-	TeeEnforced              asn1.RawValue   `asn1`
+	AttestationSecurityLevel asn1.Enumerated                        `asn1:"enum"` // 0-> Software, 1-> TEE
+	KeymasterVersion         int                                    `asn1`
+	KeymasterSecurityLevel   asn1.Enumerated                        `asn1:"enum"`
+	AttestationChallenge     []byte                                 `asn1`
+	UniqueId                 []byte                                 `asn1`
+	SoftwareEnforced         AndroidKeyAttestationAuthorizationList `asn1`
+	TeeEnforced              AndroidKeyAttestationAuthorizationList `asn1`
 }
 
 type AndroidKeyAttestationAuthorizationList struct {
-	//Purpose                   []int       `asn1:"optional,set"` //1
-	//Algorithm                 int         `asn1:"optional"`     //2
-	//KeySize                   int         `asn1:"optional"`     //3
-	//Digest                    []int       `asn1:"optional,set"` //5
-	//Padding                   []int       `asn1:"optional,set"` //6
-	//EcCurve                   int         `asn1:"optional"`     //10
-	//RsaPublicExponent         int         `asn1:"optional"`     //200
-	ActiveDateTime            int `asn1:"tag:400,explicit"` //400
-	OriginationExpireDateTime int `asn1:"tag:401,explicit"` //401
-	UsageExpireDateTime       int `asn1:"tag:402,explicit"` //402
-	//NoAuthRequired            int         `asn1:"optional"` //503 //Because this can be nil
-	//UserAuthType              int         `asn1:"optional"` //504
-	//AuthTimeout               int         `asn1:"optional"` //505
-	//AllowWhileOnBody          int         `asn1:"optional"` //506 //Because this can be nil
-	//AllApplications           int         `asn1:"optional"` //600 Because this can be nil
-	//ApplicationId             []byte      `asn1:"optional"` //601
-	CreationDateTime int `asn1:"tag:701,explicit"` //701
-	//Origin                   int         `asn1:"optional"` //702
-	//RollbackResistant        int         `asn1:"optional"` //703 //ExplicitNullOption?
-	//RootOfTrust              RootOfTrust `asn1:"optional"` //704
-	//OsVersion                int         `asn1:"optional"` //705
-	//OsPatchLevel             int         `asn1:"optional"` //706
-	//AttestationChallenge     int         `asn1:"optional"` //708
-	AttestationApplicationId []byte `asn1:"tag:709,explicit"` //709
-	//attestationApplicationId   [709] EXPLICIT OCTET_STRING OPTIONAL, # KM3
-	//attestationIdBrand         [710] EXPLICIT OCTET_STRING OPTIONAL, # KM3
-	//attestationIdDevice        [711] EXPLICIT OCTET_STRING OPTIONAL, # KM3
-	//attestationIdProduct       [712] EXPLICIT OCTET_STRING OPTIONAL, # KM3
-	//attestationIdSerial        [713] EXPLICIT OCTET_STRING OPTIONAL, # KM3
-	//attestationIdImei          [714] EXPLICIT OCTET_STRING OPTIONAL, # KM3
-	//attestationIdMeid          [715] EXPLICIT OCTET_STRING OPTIONAL, # KM3
-	//attestationIdManufacturer  [716] EXPLICIT OCTET_STRING OPTIONAL, # KM3
-	//attestationIdModel         [717] EXPLICIT OCTET_STRING OPTIONAL, # KM3
+	Purpose                   []int       `asn1:"tag:1,explicit,set,optional"`
+	Algorithm                 int         `asn1:"tag:2,explicit,optional"`
+	KeySize                   int         `asn1:"tag:3,explicit,optional"`
+	Digest                    []int       `asn1:"tag:5,explicit,set,optional"`
+	Padding                   []int       `asn1:"tag:6,explicit,set,optional"`
+	EcCurve                   int         `asn1:"tag:10,explicit,optional"`
+	RsaPublicExponent         int         `asn1:"tag:200,explicit,optional"`
+	ActiveDateTime            int         `asn1:"tag:400,explicit,optional"`
+	OriginationExpireDateTime int         `asn1:"tag:401,explicit,optional"`
+	UsageExpireDateTime       int         `asn1:"tag:402,explicit,optional"`
+	NoAuthRequired            *int        `asn1:"tag:503,explicit,optional"` //this can be nil(0)
+	UserAuthType              int         `asn1:"tag:504,explicit,optional"`
+	AuthTimeout               int         `asn1:"tag:505,explicit,optional"`
+	AllowWhileOnBody          *int        `asn1:"tag:506,explicit,optional"` //this can be nil(0)
+	AllApplications           *int        `asn1:"tag:600,explicit,optional"` //this can be nil(0)
+	ApplicationId             []byte      `asn1:"tag:601,explicit,optional"`
+	CreationDateTime          int         `asn1:"tag:701,explicit,optional"`
+	Origin                    int         `asn1:"tag:702,explicit,optional"`
+	RollbackResistant         *int        `asn1:"tag:703,explicit,optional"` //this can be nil(0)
+	RootOfTrust               RootOfTrust `asn1:"tag:704,explicit,optional"`
+	OsVersion                 int         `asn1:"tag:705,explicit,optional"`
+	OsPatchLevel              int         `asn1:"tag:706,explicit,optional"`
+	AttestationChallenge      int         `asn1:"tag:708,explicit,optional"`
+	AttestationApplicationId  []byte      `asn1:"tag:709,explicit,optional"`
+	AttestationIdBrand        []byte      `asn1:"tag:710,explicit,optional"`
+	AttestationIdDevice       []byte      `asn1:"tag:711,explicit,optional"`
+	AttestationIdProduct      []byte      `asn1:"tag:712,explicit,optional"`
+	AttestationIdSerial       []byte      `asn1:"tag:713,explicit,optional"`
+	AttestationIdImei         []byte      `asn1:"tag:714,explicit,optional"`
+	AttestationIdMeid         []byte      `asn1:"tag:715,explicit,optional"`
+	AttestationIdManufacturer []byte      `asn1:"tag:716,explicit,optional"`
+	AttestationIdModel        []byte      `asn1:"tag:717,explicit,optional"`
 }
 
 type RootOfTrust struct {
@@ -134,78 +143,50 @@ type RootOfTrust struct {
 	VerifiedBootState asn1.Enumerated `asn1:"optional,enum"` // 0 -> Verified, 1 -> SelfSigned, 2 -> Unverified, 3 -> Failed
 }
 
-type AuthorizationList struct {
-	Purpose                   asn1.RawValue `asn1:"set,optional"`
-	Algorithm                 asn1.RawValue `asn1:"explicit,optional"`
-	KeySize                   asn1.RawValue `asn1:"optional"`
-	Digest                    asn1.RawValue `asn1:"set,optional"`
-	Padding                   asn1.RawValue `asn1:"set,optional"`
-	EcCurve                   asn1.RawValue `asn1:"optional"`
-	RsaPublicExponent         asn1.RawValue `asn1:"optional"`
-	ActiveDateTime            asn1.RawValue `asn1:"optional"`
-	OriginationExpireDateTime asn1.RawValue `asn1:"optional"`
-	UsageExpireDateTime       asn1.RawValue `asn1:"optional"`
-	NoAuthRequired            asn1.RawValue `asn1:"optional"`
-	UserAuthType              asn1.RawValue `asn1:"optional"`
-	AuthTimeout               asn1.RawValue `asn1:"optional"`
-	AllowWhileOnBody          asn1.RawValue `asn1:"optional"`
-	AllApplications           asn1.RawValue `asn1:"optional"`
-	ApplicationId             asn1.RawValue `asn1:"optional"`
-	CreationDateTime          asn1.RawValue `asn1:"optional"`
-	Origin                    asn1.RawValue `asn1:"optional"`
-	RollbackResistant         asn1.RawValue `asn1:"optional"`
-	RootOfTrust               asn1.RawValue `asn1:"optional"`
-	OsVersion                 asn1.RawValue `asn1:"optional"`
-	OsPatchLevel              asn1.RawValue `asn1:"optional"`
-	AttestationChallenge      asn1.RawValue `asn1:"optional"`
-	AttestationApplicationId  asn1.RawValue `asn1:"optional"`
-}
-
 // ValidateClientData follows requirements from https://www.w3.org/TR/webauthn/#registering-a-new-credential
 // x.x.x represents each criteria
 // TODO challenge needs to be extracted from DB or some kind of data storage
 // https://github.com/ugorji/go/issues/277
-func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId string, requiresUserVerification bool) ([]byte, error) {
+func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId string, requiresUserVerification bool) (certChains [][]*x509.Certificate, attType AttestationType, err error) {
 	clientDataInBytes, err := base64.RawURLEncoding.DecodeString(s.ClientDataJSON)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Failed to decode ClientDataJSON in Base64 URL format: %v", s.ClientDataJSON))
+		return nil, AttestationType(0), errors.New(fmt.Sprintf("Failed to decode ClientDataJSON in Base64 URL format: %v", s.ClientDataJSON))
 	}
 
 	// 7.1.1
 	if !utf8.Valid(clientDataInBytes) {
-		return nil, errors.New(fmt.Sprintf("Invalid UTF8 encoded value: %v", clientDataInBytes))
+		return nil, AttestationType(0), errors.New(fmt.Sprintf("Invalid UTF8 encoded value: %v", clientDataInBytes))
 	}
 
 	// 7.1.2
 	var clientData ClientData
 	if err := json.Unmarshal(clientDataInBytes, &clientData); err != nil {
-		return nil, errors.New("Failed Unmarshal ClientDataJSON")
+		return nil, AttestationType(0), errors.New("Failed Unmarshal ClientDataJSON")
 	}
 
 	// 7.1.3
 	// TODO make this enum and check the value
 	if clientData.Type != "webauthn.create" {
-		return nil, errors.New("ClientData type is not 'webauthn.create'")
+		return nil, AttestationType(0), errors.New("ClientData type is not 'webauthn.create'")
 	}
 
 	// 7.1.4
 	if clientData.Challenge != challenge {
 		errorMessage := "Challenge from Client Data is not same as the one from ServerPublicKeyCredentialCreationOptionsResponse\n"
 		errorMessage += fmt.Sprintf("Expected %s, but was %s", challenge, clientData.Challenge)
-		return nil, errors.New(errorMessage)
+		return nil, AttestationType(0), errors.New(errorMessage)
 	}
 
 	// 7.1.5
 	if clientData.Origin != origin {
 		errorMessage := "ClientData challenge is not same as the origin\n"
 		errorMessage += fmt.Sprintf("Expected %s, but was %s", origin, clientData.Origin)
-		return nil, errors.New(errorMessage)
+		return nil, AttestationType(0), errors.New(errorMessage)
 	}
 
 	// 7.1.6
 	// TODO Skip for now (Got No Idea)
 	//if clientData.TokenBiding.TokenBindingStatus == {
-	//
 	//}
 
 	// 7.1.7
@@ -217,19 +198,19 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 	cborByte := make([]byte, base64.RawURLEncoding.DecodedLen(len(s.AttestationObject)))
 	cborByte, err = base64.RawURLEncoding.DecodeString(s.AttestationObject)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed base64 url decoding AttestationObject")
+		return nil, AttestationType(0), errors.Wrap(err, "failed base64 url decoding AttestationObject")
 	}
 
 	// TODO Need to find a way to decode ao.attStmt because it would vary based on ao.fmt
 	ao := AttestationObject{AttStmt: AndroidKeyAttestationStmt{}}
 	if err := codec.NewDecoderBytes(cborByte, new(codec.CborHandle)).Decode(&ao); err != nil {
-		return nil, errors.Wrap(err, "failed cbor decoding AttestationObject")
+		return nil, AttestationType(0), errors.Wrap(err, "failed cbor decoding AttestationObject")
 	}
 
 	// 7.1.9 Verifying that the RP ID hash in auth Data is sha256 of RP ID
 	// AuthData: https://www.w3.org/TR/webauthn/#authenticator-data
 	if len(ao.AuthData) < 37 {
-		return nil, errors.New("AuthData must be 37 bytes or more")
+		return nil, AttestationType(0), errors.New("AuthData must be 37 bytes or more")
 	}
 	sha = sha256.New()
 	sha.Write([]byte(rpId))
@@ -238,7 +219,7 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 	if bytes.Compare(rpIdHash, ao.AuthData[0:32]) != 0 {
 		errorMessage := "RP ID Hash in authData is not SHA-256 hash of the RP ID\n"
 		errorMessage += fmt.Sprintf("Expected %x, but was %x", rpIdHash, ao.AuthData[0:32])
-		return nil, errors.New(errorMessage)
+		return nil, AttestationType(0), errors.New(errorMessage)
 	}
 
 	// 7.1.10
@@ -246,13 +227,13 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 	up := flags & (1 << 0) >> 0
 	if up == 0 {
 		// https://www.w3.org/TR/webauthn/#test-of-user-presence
-		return nil, errors.New("Requires user interaction with an authenticator (Not necessary has to be verification)")
+		return nil, AttestationType(0), errors.New("Requires user interaction with an authenticator (Not necessary has to be verification)")
 	}
 
 	// 7.1.11
 	uv := flags & (1 << 2) >> 2
 	if requiresUserVerification && uv == 0 {
-		return nil, errors.New("Requires user verification by an authenticator.")
+		return nil, AttestationType(0), errors.New("Requires user verification by an authenticator.")
 	}
 
 	// 7.1.12 Verifying the client extension
@@ -262,7 +243,7 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 	}
 
 	// They will be used later
-	doesIncludeAttestedClientData := flags & (1 << 6) >> 6
+	//doesIncludeAttestedClientData := flags & (1 << 6) >> 6
 	//aaguid := ao.AuthData[37:53]
 	credentialIdLength := ao.AuthData[53:55]
 	//credentialId := ao.AuthData[55 : 55+credentialIdLength[1]]
@@ -283,17 +264,36 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 
 		// 1) Verify that attStmt is valid CBOR conforming to the syntax defined above and perform CBOR decoding on it to extract the contained fields.
 		// TODO
+		if len(stmt.X5c) != 3 { // Expecting leaf,intermediate, root certificates
+			return nil, AttestationType(0), errors.New("Android Key-Attestation Statement does not contain leaf, intermediate, and root certificates.")
+		}
+
+		var leafCert, intermediateCert, rootCert *x509.Certificate
+		if leafCert, err = x509.ParseCertificate(stmt.X5c[0]); err != nil {
+			return nil, AttestationType(0), errors.New("Failed to parse leaf-cert's PEM encoded certificates")
+		}
+
+		if intermediateCert, err = x509.ParseCertificate(stmt.X5c[1]); err != nil {
+			return nil, AttestationType(0), errors.New("Failed to parse intermediate-cert's PEM encoded certificates")
+		}
+
+		if rootCert, err = x509.ParseCertificate(stmt.X5c[2]); err != nil {
+			return nil, AttestationType(0), errors.New("Failed to parse root-cert's PEM encoded certificates")
+		}
+
+		certsPool := x509.NewCertPool()
+		certsPool.AddCert(intermediateCert)
+		certsPool.AddCert(rootCert)
+
+		certChains, err = leafCert.Verify(x509.VerifyOptions{Roots: certsPool})
+		if err != nil {
+			return nil, AttestationType(0), errors.New("Failed to parse root-cert's PEM encoded certificates")
+		}
 
 		// 2) Verify that sig is a valid signature over the concatenation of authenticatorData and clientDataHash using the public key in the first certificate in x5c with the algorithm specified in alg
 		signed := append(ao.AuthData, clientDataHash...)
-
-		leafCert, err := x509.ParseCertificate(stmt.X5c[0])
-		if err != nil {
-			return nil, errors.New("Failed to parse PEM encoded certificates")
-		}
-
 		if err := leafCert.CheckSignature(leafCert.SignatureAlgorithm, signed, stmt.Signature); err != nil {
-			return nil, errors.Wrap(err, "Failed to verify a signature over the concatenation of authenticatorData and clientDataHash using the public key in the first certificate in x5c with the algorithm specified in alg")
+			return nil, AttestationType(0), errors.Wrap(err, "Failed to verify a signature over the concatenation of authenticatorData and clientDataHash using the public key in the first certificate in x5c with the algorithm specified in alg")
 		}
 
 		// 3) Verify that the public key in the first certificate in in x5c matches the credentialPublicKey in the attestedCredentialData in authenticatorData
@@ -302,7 +302,7 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 		cosePublicKeyInByte := ao.AuthData[55+credentialIdLength[1]:]
 		var coseKey map[int]interface{}
 		if err := codec.NewDecoderBytes(cosePublicKeyInByte, new(codec.CborHandle)).Decode(&coseKey); err != nil {
-			return nil, errors.Wrap(err, "failed cbor decoding AttestationObject")
+			return nil, AttestationType(0), errors.Wrap(err, "failed cbor decoding AttestationObject")
 		}
 
 		// COSE Key Common Parameters: https://www.iana.org/assignments/cose/cose.xhtml#key-type-parameters
@@ -315,7 +315,7 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 				new(big.Int).SetBytes(coseKey[-2].([]byte)), //x
 				new(big.Int).SetBytes(coseKey[-3].([]byte))) //y
 			if !isOnCurve {
-				return nil, errors.New("The public key in the leaf certificate does not match the `credentialPublicKey` in the `attestedCredentialData` in `authenticatorData`.")
+				return nil, AttestationType(0), errors.New("The public key in the leaf certificate does not match the `credentialPublicKey` in the `attestedCredentialData` in `authenticatorData`.")
 			}
 		}
 
@@ -324,97 +324,34 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 			if v.Id.Equal(androidKeyAttestationOID) {
 				var extensions AndroidKeyAttestationExtensionSchema
 				if _, err := asn1.Unmarshal(v.Value, &extensions); err != nil {
-					return nil, errors.Wrap(err, "Failed to decode certificate extension into asn1 sequence")
+					return nil, AttestationType(0), errors.Wrap(err, "Failed to decode certificate extension into asn1 sequence")
 				}
-				fmt.Println(fmt.Sprintf("%x", v.Value))
-				fmt.Println(extensions.AttestationVersion)
-				fmt.Println(extensions.KeymasterVersion)
+
 				// 4-1) The value of the attestationChallenge field is identical to clientDataHash.
 				if !bytes.Equal(extensions.AttestationChallenge, clientDataHash) {
-					return nil, errors.New("Failed to verify that the value of the attestationChallenge field is identical to clientDataHash")
+					return nil, AttestationType(0), errors.New("Failed to verify that the value of the attestationChallenge field is identical to clientDataHash")
 				}
 
-				fmt.Println(extensions.SoftwareEnforced)
-				fmt.Println(extensions.TeeEnforced)
-				fmt.Println(fmt.Sprintf("%x", extensions.SoftwareEnforced.FullBytes))
-				fmt.Println(fmt.Sprintf("%x", extensions.TeeEnforced.FullBytes))
 				// 4-2) The AuthorizationList.allApplications field is not present, since PublicKeyCredential MUST be bound to the RP ID.
-				fmt.Println("=================================================")
-				fmt.Println("============= Sw Enforced Checking ==============")
-				fmt.Println("=================================================")
-
-				fmt.Println("============= fuga ==============")
-				var fuga AuthorizationList
-				if _, err := asn1.Unmarshal(extensions.SoftwareEnforced.FullBytes, &fuga); err != nil {
-					return nil, errors.Wrap(err, "bbbbbbbb")
+				if extensions.TeeEnforced.AllApplications != nil {
+					return nil, AttestationType(0), errors.New("The AuthorizationList.allApplications field must be nil")
 				}
-				fmt.Println(fuga)
-
-				fmt.Println("============= hoge ==============")
-				var hoge AndroidKeyAttestationAuthorizationList
-				if _, err := asn1.Unmarshal(extensions.SoftwareEnforced.FullBytes, &hoge); err != nil {
-					return nil, errors.Wrap(err, "bbbbbbbb")
-				}
-				fmt.Println(hoge)
-				//fmt.Println(fmt.Sprintf("1: %v:", hoge.Purpose))
-				//fmt.Println(fmt.Sprintf("2: %v:", hoge.Algorithm))
-				//fmt.Println(fmt.Sprintf("3: %v:", hoge.KeySize))
-				//fmt.Println(fmt.Sprintf("5: %v:", hoge.Digest))
-				//fmt.Println(fmt.Sprintf("10: %v:", hoge.EcCurve))
-				fmt.Println(fmt.Sprintf("400: %v:", hoge.ActiveDateTime))
-				fmt.Println(fmt.Sprintf("401: %v:", hoge.OriginationExpireDateTime))
-				fmt.Println(fmt.Sprintf("402: %v:", hoge.UsageExpireDateTime))
-				//fmt.Println(fmt.Sprintf("504: %v:", hoge.UserAuthType))
-				//fmt.Println(fmt.Sprintf("505: %v:", hoge.AuthTimeout))
-				fmt.Println(fmt.Sprintf("701: %v:", hoge.CreationDateTime))
-				//fmt.Println(fmt.Sprintf("702: %v:", hoge.Origin))
-				fmt.Println(fmt.Sprintf("709: %v:", hoge.AttestationApplicationId))
-
-				fmt.Println("==================================================")
-				fmt.Println("============= Tee Enforced Checking ==============")
-				fmt.Println("==================================================")
-				if _, err := asn1.Unmarshal(extensions.TeeEnforced.FullBytes, &hoge); err != nil {
-					return nil, errors.Wrap(err, "aaaaaaaaaa")
-				}
-
-				fmt.Println("============= hoge ==============")
-				fmt.Println(hoge)
-				//fmt.Println(fmt.Sprintf("1: %v:", hoge.Purpose))
-				//fmt.Println(fmt.Sprintf("2: %v:", hoge.Algorithm))
-				//fmt.Println(fmt.Sprintf("3: %v:", hoge.KeySize))
-				//fmt.Println(fmt.Sprintf("5: %v:", hoge.Digest))
-				//fmt.Println(fmt.Sprintf("10: %v:", hoge.EcCurve))
-				fmt.Println(fmt.Sprintf("400: %v:", hoge.ActiveDateTime))
-				fmt.Println(fmt.Sprintf("401: %v:", hoge.OriginationExpireDateTime))
-				fmt.Println(fmt.Sprintf("402: %v:", hoge.UsageExpireDateTime))
-				//fmt.Println(fmt.Sprintf("504: %v:", hoge.UserAuthType))
-				//fmt.Println(fmt.Sprintf("505: %v:", hoge.AuthTimeout))
-				fmt.Println(fmt.Sprintf("701: %v:", hoge.CreationDateTime))
-				//fmt.Println(fmt.Sprintf("702: %v:", hoge.Origin))
-				fmt.Println(fmt.Sprintf("709: %v:", hoge.AttestationApplicationId))
-
-				if _, err := asn1.Unmarshal(extensions.TeeEnforced.FullBytes, &fuga); err != nil {
-					return nil, errors.Wrap(err, "aaaaaaaaaa")
-				}
-				fmt.Println("============= fuga ==============")
-				fmt.Println(fuga)
-
-				//fmt.Println(extensions.TeeEnforced)
-				//if extensions.SoftwareEnforced[0].AllApplications != nil || extensions.TeeEnforced[0].AllApplications != nil {
-				//	return nil, errors.New("AuthorizationList.allApplications field is supposed to be not present")
-				//}
 
 				// 4-3) The value in the AuthorizationList.origin field is equal to KM_TAG_GENERATED.
 				// 4-4) The value in the AuthorizationList.purpose field is equal to KM_PURPOSE_SIGN.
+				// Actually KM_TAG_GENERATED is no longer exists according to https://github.com/w3c/webauthn/issues/1022
+				// Correct value would be KM_ORIGIN_GENERATED (0)
+				// Also, KM_PURPOSE_SIGN is 2
+				// Ref:https://source.android.com/security/keystore/tags
+				if extensions.TeeEnforced.Origin != 0 || extensions.TeeEnforced.Purpose[0] != 2 {
+					return nil, AttestationType(0), errors.New(fmt.Sprintf("Expecting AuthorizationList.origin = 0 and AuthorizationList.purpose = 2, but was origin: %v, purpose: %v", extensions.TeeEnforced.Origin, extensions.TeeEnforced.Purpose))
+				}
 			}
 		}
-		if !false {
-			return nil, errors.New("Not finished to Verify that in the attestation certificate extension data")
-		}
 
-		return nil, nil
+		attType = AttestationType(1)
+		err = nil
 	case "android-safetynet": // https://www.w3.org/TR/webauthn/#android-safetynet-attestation
-		fmt.Println(ao.AttStmt)
 		// 1) Verify that attStmt is valid CBOR conforming to the syntax defined above and perform CBOR decoding on it to extract the contained fields.
 		// TODO
 
@@ -426,7 +363,7 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 		rawJWS := string(ao.AttStmt.(AndroidSafetyNetAttestationStmt).Response)
 		token, err := jwt.ParseSigned(rawJWS)
 		if err != nil {
-			return nil, err
+			return nil, AttestationType(0), err
 		}
 
 		// 3) Verifying the nonce requires to retrieve response
@@ -435,7 +372,7 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 		// 4) Verify that the attestation certificate is issued to the hostname "attest.android.com"
 		rootCerts := x509.NewCertPool()
 		if ok := rootCerts.AppendCertsFromPEM([]byte(androidSafetyNetAuthenticatorRootPEM)); !ok {
-			return nil, errors.New("Failed to parse PEM encoded certificates")
+			return nil, AttestationType(0), errors.New("Failed to parse PEM encoded certificates")
 		}
 
 		opts := x509.VerifyOptions{
@@ -447,12 +384,12 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 		// attestationCert
 		attestationCert, err := token.Headers[0].Certificates(opts)
 		if err != nil {
-			return nil, err
+			return nil, AttestationType(0), err
 		}
 
 		response := &AndroidSafetyNetAttestationResponse{}
 		if err := token.Claims(attestationCert[0][0].PublicKey, response); err != nil {
-			return nil, err
+			return nil, AttestationType(0), err
 		}
 
 		// 3) Verify that the nonce in the response is identical to the SHA-256 hash of the concatenation of authenticatorData and clientDataHash.
@@ -465,44 +402,18 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 		if response.Nonce != expectedNonce {
 			errorMessage := "Nonce in Android SafetyNet Attestation Statement seems wrong\n"
 			errorMessage += fmt.Sprintf("Expected %s, but was %s", expectedNonce, response.Nonce)
-			return nil, errors.New(errorMessage)
+			return nil, AttestationType(0), errors.New(errorMessage)
 		}
 
 		// Verify that the ctsProfileMatch attribute in the payload of response is true
 		if !response.CtsProfileMatch {
-			return nil, errors.New("CtsProfileMatch must be true")
+			return nil, AttestationType(0), errors.New("CtsProfileMatch must be true")
 		}
+
+		return nil, AttestationType(1), nil
 	case "fido-u2f":
 	case "none":
 	}
 
-	doesIncludeAttestedClientData = flags & (1 << 6) >> 6
-	if doesIncludeAttestedClientData == 1 {
-		// 7.17
-		// TODO Check that the credentialId is not yet registered to any other user
-		// 7.18
-		// TODO Register user associating credentialId and credentialPublicKey
-	}
-
-	return nil, nil
-}
-
-type Tsr struct {
-	Result struct {
-		Code   int
-		Detail struct{ Message string }
-	}
-	SignedData struct {
-		OID  asn1.ObjectIdentifier
-		Zero struct {
-			Seq struct {
-				Int int
-				Set struct {
-					InnerSeq struct {
-						OID asn1.ObjectIdentifier
-					}
-				} `asn1:"set"`
-			}
-		} `asn1:"tag:0"`
-	}
+	return nil, AttestationType(0), nil
 }
