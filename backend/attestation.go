@@ -202,7 +202,7 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 	}
 
 	// TODO Need to find a way to decode ao.attStmt because it would vary based on ao.fmt
-	ao := AttestationObject{AttStmt: AndroidKeyAttestationStmt{}}
+	ao := AttestationObject{AttStmt: AndroidSafetyNetAttestationStmt{}}
 	if err := codec.NewDecoderBytes(cborByte, new(codec.CborHandle)).Decode(&ao); err != nil {
 		return nil, AttestationType(0), errors.Wrap(err, "failed cbor decoding AttestationObject")
 	}
@@ -349,8 +349,7 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 			}
 		}
 
-		attType = AttestationType(1)
-		err = nil
+		return certChains, AttestationType(1), nil
 	case "android-safetynet": // https://www.w3.org/TR/webauthn/#android-safetynet-attestation
 		// 1) Verify that attStmt is valid CBOR conforming to the syntax defined above and perform CBOR decoding on it to extract the contained fields.
 		// TODO
@@ -380,15 +379,14 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 			DNSName: "attest.android.com",
 		}
 
-		// go-jose internally verify that attestationCert is issued to the hostname "attest.android.com"
-		// attestationCert
-		attestationCert, err := token.Headers[0].Certificates(opts)
+		// go-jose internally verify that certChains is issued to the hostname "attest.android.com"
+		// certChains
+		certChains, err = token.Headers[0].Certificates(opts)
 		if err != nil {
 			return nil, AttestationType(0), err
 		}
-
 		response := &AndroidSafetyNetAttestationResponse{}
-		if err := token.Claims(attestationCert[0][0].PublicKey, response); err != nil {
+		if err := token.Claims(certChains[0][0].PublicKey, response); err != nil {
 			return nil, AttestationType(0), err
 		}
 
@@ -410,7 +408,7 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 			return nil, AttestationType(0), errors.New("CtsProfileMatch must be true")
 		}
 
-		return nil, AttestationType(1), nil
+		return certChains, AttestationType(1), nil
 	case "fido-u2f":
 	case "none":
 	}
