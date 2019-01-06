@@ -9,10 +9,10 @@ import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.spec.ECGenParameterSpec
 
-val provier = "AndroidKeyStore"
-val keyStoreAlias = "FidoAssertionKey"
+const val provider = "AndroidKeyStore"
+const val keyStoreAlias = "FidoAssertionKey"
 // TODO erase this later
-val challenge = "Tf65bS6D5temh2BwvptqgBPb25iZDRxjwC5ans91IIJDrcrOpnWTK4LVgFjeUV4GDMe44w8SI5NsZssIXTUvDg"
+const val challenge = "Tf65bS6D5temh2BwvptqgBPb25iZDRxjwC5ans91IIJDrcrOpnWTK4LVgFjeUV4GDMe44w8SI5NsZssIXTUvDg"
 
 class MainActivity : AppCompatActivity() {
 
@@ -20,11 +20,11 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val keyStore = KeyStore.getInstance(provier)
+        val keyStore = KeyStore.getInstance(provider)
         keyStore.load(null)
 
         if (!keyStore.containsAlias(keyStoreAlias)) {
-            generateKeyPair(keyStoreAlias, true, true)
+            generateKeyPair(keyStoreAlias, challenge, true, true)
         }
 
         val certs = keyStore.getCertificateChain(keyStoreAlias)
@@ -35,7 +35,7 @@ class MainActivity : AppCompatActivity() {
     }
 }
 
-fun generateKeyPair(storeAlias: String, up: Boolean, uv : Boolean): KeyPair {
+fun generateKeyPair(storeAlias: String, challenge: String, up: Boolean, uv : Boolean): KeyPair {
     val params = KeyGenParameterSpec.Builder(storeAlias, KeyProperties.PURPOSE_SIGN)
         // TODO
         // For Now, just use ECDSA w/ SHA-256 for algorithm: //For Now, just use ES256
@@ -52,7 +52,7 @@ fun generateKeyPair(storeAlias: String, up: Boolean, uv : Boolean): KeyPair {
         .build()
 
     val keyPairGenerator = KeyPairGenerator
-        .getInstance(KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore")
+        .getInstance(KeyProperties.KEY_ALGORITHM_EC, provider)
     keyPairGenerator.initialize(params)
 
     return keyPairGenerator.generateKeyPair()
