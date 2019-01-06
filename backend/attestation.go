@@ -176,6 +176,7 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 		errorMessage += fmt.Sprintf("Expected %s, but was %s", challenge, clientData.Challenge)
 		return nil, AttestationType(0), errors.New(errorMessage)
 	}
+	fmt.Println(challenge)
 
 	// 7.1.5
 	if clientData.Origin != origin {
@@ -186,6 +187,7 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 
 	// 7.1.6
 	// TODO Skip for now (Got No Idea)
+	//FIXME
 	//if clientData.TokenBiding.TokenBindingStatus == {
 	//}
 
@@ -285,7 +287,7 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 
 		// 3) Verify that the public key in the first certificate in in x5c matches the credentialPublicKey in the attestedCredentialData in authenticatorData
 		//TODO This is ignoring the fact that cosePublicKeyInByte is not fixed length while possibly having extension Data followed by cosePublicKeyInByte
-		//NEED HELP
+		//FIXME
 		cosePublicKeyInByte := ao.AuthData[55+credentialIdLength[1]:]
 		var coseKey map[int]interface{}
 		if err := codec.NewDecoderBytes(cosePublicKeyInByte, new(codec.CborHandle)).Decode(&coseKey); err != nil {
@@ -297,6 +299,7 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 		switch pub := leafCert.PublicKey.(type) { // https://www.iana.org/assignments/cose/cose.xhtml#algorithms
 		case *ecdsa.PublicKey:
 			// TODO Not Quite sure if this is the right approach
+			//FIXME
 			isOnCurve := pub.IsOnCurve(
 				//-2 and -3 comes EC2 Key Types -> https://tools.ietf.org/html/rfc8152#section-13.1
 				new(big.Int).SetBytes(coseKey[-2].([]byte)), //x
@@ -361,6 +364,7 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 
 		// 2) Verify that response is a valid SafetyNet response of version ver.
 		// TODO Not quite sure what would be "valid SafetyNet response of version ver"
+		//FIXME
 		// https://developer.android.com/training/safetynet/attestation#check-gps-version
 
 		// Response is actually in JWS format

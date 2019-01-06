@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -21,7 +20,9 @@ var rp = "Example Corporation"
 var uuid = "S3932ee31vKEC0JtJMIQ"
 var userName = "kengoscal@gmail.com"
 var displayName = "ken5scal"
-var challenge string
+
+// TODO Change later
+var challenge = "Tf65bS6D5temh2BwvptqgBPb25iZDRxjwC5ans91IIJDrcrOpnWTK4LVgFjeUV4GDMe44w8SI5NsZssIXTUvDg"
 var config Config
 
 type Config struct {
@@ -149,7 +150,8 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		sha := sha256.New()
 		sha.Write([]byte(""))
-		challenge = hex.EncodeToString(sha.Sum(nil))
+		// TODO Uncomment later
+		//challenge = hex.EncodeToString(sha.Sum(nil))
 
 		optionsResponse.Challenge = challenge
 		optionsResponse.PublicKeyCredentialRpEntity = struct {
