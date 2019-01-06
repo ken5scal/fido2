@@ -6,14 +6,15 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/gorilla/mux"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"io"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"os"
+
+	"github.com/gorilla/mux"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 var rp = "Example Corporation"
@@ -159,7 +160,10 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 			Name        string `json:"name"`
 			DisplayName string `json:"displayName"`
 		}{uuid, optionsRequest.UserName, optionsRequest.DisplayName}
-		optionsResponse.PublicKeyCredentialParameters = []PubKeyParam{{Type: "publick-key", Alg: -7}} //For Now, just use ES256
+		// For Now, just use ECDSA w/ SHA-256 for algorithm (ES256)
+		// According to RFC8152, "it is suggested that SHA-256 be used only with curve P-256"
+		// This automatically makes the curve to be 'secp256r1' according to recommendation in RFC5480
+		optionsResponse.PublicKeyCredentialParameters = []PubKeyParam{{Type: "publick-key", Alg: -7}}
 	}
 
 	// Encode Response

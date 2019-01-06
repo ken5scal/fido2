@@ -202,7 +202,7 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 	}
 
 	// TODO Need to find a way to decode ao.attStmt because it would vary based on ao.fmt
-	ao := AttestationObject{AttStmt: AndroidSafetyNetAttestationStmt{}}
+	ao := AttestationObject{AttStmt: AndroidKeyAttestationStmt{}}
 	if err := codec.NewDecoderBytes(cborByte, new(codec.CborHandle)).Decode(&ao); err != nil {
 		return nil, AttestationType(0), errors.Wrap(err, "failed cbor decoding AttestationObject")
 	}
@@ -264,31 +264,18 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 
 		// 1) Verify that attStmt is valid CBOR conforming to the syntax defined above and perform CBOR decoding on it to extract the contained fields.
 		// TODO
+
 		if len(stmt.X5c) != 3 { // Expecting leaf,intermediate, root certificates
 			return nil, AttestationType(0), errors.New("Android Key-Attestation Statement does not contain leaf, intermediate, and root certificates.")
 		}
 
-		var leafCert, intermediateCert, rootCert *x509.Certificate
+		var leafCert *x509.Certificate
 		if leafCert, err = x509.ParseCertificate(stmt.X5c[0]); err != nil {
 			return nil, AttestationType(0), errors.New("Failed to parse leaf-cert's PEM encoded certificates")
 		}
 
-		if intermediateCert, err = x509.ParseCertificate(stmt.X5c[1]); err != nil {
-			return nil, AttestationType(0), errors.New("Failed to parse intermediate-cert's PEM encoded certificates")
-		}
-
-		if rootCert, err = x509.ParseCertificate(stmt.X5c[2]); err != nil {
-			return nil, AttestationType(0), errors.New("Failed to parse root-cert's PEM encoded certificates")
-		}
-
-		certsPool := x509.NewCertPool()
-		certsPool.AddCert(intermediateCert)
-		certsPool.AddCert(rootCert)
-
-		certChains, err = leafCert.Verify(x509.VerifyOptions{Roots: certsPool})
-		if err != nil {
-			return nil, AttestationType(0), errors.New("Failed to parse root-cert's PEM encoded certificates")
-		}
+		fmt.Println(leafCert.SignatureAlgorithm)
+		fmt.Println(leafCert.PublicKeyAlgorithm)
 
 		// 2) Verify that sig is a valid signature over the concatenation of authenticatorData and clientDataHash using the public key in the first certificate in x5c with the algorithm specified in alg
 		signed := append(ao.AuthData, clientDataHash...)
@@ -347,6 +334,24 @@ func (s ServerAuthenticatorAttestationResponse) Validate(challenge, origin, rpId
 					return nil, AttestationType(0), errors.New(fmt.Sprintf("Expecting AuthorizationList.origin = 0 and AuthorizationList.purpose = 2, but was origin: %v, purpose: %v", extensions.TeeEnforced.Origin, extensions.TeeEnforced.Purpose))
 				}
 			}
+		}
+
+		var intermediateCert, rootCert *x509.Certificate
+		if intermediateCert, err = x509.ParseCertificate(stmt.X5c[1]); err != nil {
+			return nil, AttestationType(0), errors.New("Failed to parse intermediate-cert's PEM encoded certificates")
+		}
+
+		if rootCert, err = x509.ParseCertificate(stmt.X5c[2]); err != nil {
+			return nil, AttestationType(0), errors.New("Failed to parse root-cert's PEM encoded certificates")
+		}
+
+		certsPool := x509.NewCertPool()
+		certsPool.AddCert(intermediateCert)
+		certsPool.AddCert(rootCert)
+
+		certChains, err = leafCert.Verify(x509.VerifyOptions{Roots: certsPool})
+		if err != nil {
+			return nil, AttestationType(0), errors.New("Failed to parse root-cert's PEM encoded certificates")
 		}
 
 		return certChains, AttestationType(1), nil
